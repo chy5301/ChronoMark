@@ -131,8 +131,8 @@ app/src/main/java/io/github/chy5301/chronomark/
 
 #### 时间显示区
 ```
-           00:14.235           ← 主计时器（64sp，加粗）
-        13:47:37.306           ← 墙上时钟（24sp，次要颜色）
+           00:14.235                ← 主计时器（64sp，加粗）
+      2025-11-10 13:47:37           ← 墙上时钟（24sp，次要颜色，带日期）
 ```
 
 #### 记录卡片布局
@@ -203,9 +203,9 @@ sealed class StopwatchStatus {
 // UI 状态
 data class StopwatchUiState(
     val status: StopwatchStatus = StopwatchStatus.Idle,
-    val currentTime: String = "00:00.000",         // 格式化的计时器时间
-    val wallClockTime: String = "00:00:00.000",   // 格式化的墙上时钟
-    val currentTimeNanos: Long = 0L,               // 原始纳秒值
+    val currentTime: String = "00:00.000",              // 格式化的计时器时间
+    val wallClockTime: String = "0000-00-00 00:00:00", // 格式化的墙上时钟（带日期）
+    val currentTimeNanos: Long = 0L,                    // 原始纳秒值
     val records: List<TimeRecord> = emptyList()
 )
 ```
@@ -219,8 +219,11 @@ formatElapsed(nanos) -> "00:07.403"
 // 时间差格式: +MM:SS.mmm
 formatSplit(nanos) -> "+00:07.403"
 
-// 墙上时钟格式: HH:mm:ss.SSS (时:分:秒.毫秒)
+// 墙上时钟格式（记录卡片）: HH:mm:ss.SSS (时:分:秒.毫秒)
 formatWallClock(timestampMillis) -> "13:47:30.474"
+
+// 墙上时钟格式（主界面显示）: yyyy-MM-dd HH:mm:ss (日期+时间，不含毫秒)
+formatWallClockWithDate(timestampMillis) -> "2025-11-10 13:47:37"
 
 // 导出用完整时间: yyyy-MM-dd HH:mm:ss.SSS
 formatFullTimestamp(timestampMillis) -> "2025-11-10 13:47:30.474"
@@ -273,7 +276,7 @@ ChronoMark 秒表记录
 
 #### 字体大小
 - 主计时器: 64sp（加粗）
-- 墙上时钟: 24sp（常规）
+- 墙上时钟（主界面）: 24sp（常规）
 - 记录累计时间: 28sp（加粗）
 - 记录序号: 16sp（常规）
 - 记录时间差: 20sp（常规）
@@ -351,7 +354,8 @@ ChronoMark 秒表记录
 - **高精度计时**: 使用 `System.nanoTime()` 获取纳秒级精度，确保毫秒显示准确
 - **时间格式化**: 使用 `java.time` API（项目最低 SDK 24 已支持，无需额外库）
 - **导出功能**: 需要处理 Android 存储权限（Android 10+ 使用 Scoped Storage）
-- **计时更新频率**: ViewModel 中使用协程每 10ms 更新一次 UI，确保流畅显示
+- **计时更新频率**: ViewModel 中使用协程每 10ms 更新一次计时器，确保毫秒精度显示
+- **墙上时钟更新**: 独立协程每秒更新一次墙上时钟，不受秒表状态影响
 - **状态管理**: 使用 StateFlow 确保 UI 状态单向数据流
 - **传统秒表操作**: 标记操作必须瞬间完成，不能中断计时流程
 
@@ -370,21 +374,49 @@ fun getCurrentElapsedTime(): Long {
 
 #### 协程计时更新
 ```kotlin
+// 计时器更新（仅在运行时执行）
 private fun startTimerTicking() {
     timerJob = viewModelScope.launch {
         while (isActive) {
-            delay(10)  // 每 10ms 更新一次
+            delay(10)  // 每 10ms 更新一次计时器
             updateCurrentTime()
         }
     }
+}
+
+// 墙上时钟更新（始终运行，独立于秒表状态）
+private fun startWallClockTicking() {
+    wallClockJob = viewModelScope.launch {
+        while (isActive) {
+            updateWallClock()
+            delay(1000)  // 每秒更新一次墙上时钟
+        }
+    }
+}
+
+// 在 ViewModel 的 init 块中启动墙上时钟
+init {
+    startWallClockTicking()
 }
 ```
 
 #### 时间格式化示例
 ```kotlin
 // 使用 java.time API
-val instant = Instant.ofEpochMilli(timestampMillis)
-val formatter = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
-    .withZone(ZoneId.systemDefault())
-val formattedTime = formatter.format(instant)
+
+// 记录卡片时间戳格式（HH:mm:ss.SSS）
+fun formatWallClock(timestampMillis: Long): String {
+    val instant = Instant.ofEpochMilli(timestampMillis)
+    val formatter = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
+        .withZone(ZoneId.systemDefault())
+    return formatter.format(instant)
+}
+
+// 主界面墙上时钟格式（yyyy-MM-dd HH:mm:ss）
+fun formatWallClockWithDate(timestampMillis: Long): String {
+    val instant = Instant.ofEpochMilli(timestampMillis)
+    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+        .withZone(ZoneId.systemDefault())
+    return formatter.format(instant)
+}
 ```
