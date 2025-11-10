@@ -1,13 +1,14 @@
 # CLAUDE.md
 
 该文件为 Claude Code（claude.ai/code）在处理本代码库时提供指导。
+
 ## 项目概述
 
-ChronoMark 是一个基于 Jetpack Compose 的 Android 秒表应用，支持记录时间点、时间差、世界时间以及为每个时间点添加备注和导出功能。
+ChronoMark 是一个基于 Jetpack Compose 的 Android 秒表应用，采用简洁的传统秒表设计，支持高精度计时（毫秒级）、时间点标记、备注添加、实时墙上时钟显示以及多格式数据导出功能。
 
 ## 项目状态
 
-**当前阶段**: 项目初始化完成，处于架构规划和功能开发阶段
+**当前阶段**: 项目初始化完成，详细设计已确定，准备开始功能开发
 
 ## 技术栈
 
@@ -103,11 +104,235 @@ app/src/main/java/io/github/chy5301/chronomark/
 
 ### 核心功能模块
 
-1. **秒表计时**: 精确计时，支持开始、暂停、继续、重置
-2. **时间点记录**: 记录每个标记点的时间戳、时间差
-3. **世界时间**: 显示标记时对应的不同时区时间
-4. **备注功能**: 为每个时间点添加文字说明
-5. **数据导出**: 支持导出为 CSV/JSON/TXT 格式
+1. **秒表计时**: 高精度计时（毫秒级），支持开始、暂停、继续、停止、重置
+2. **时间点标记**: 运行中可瞬间标记时间点，不中断计时流程
+3. **双时间显示**: 同时显示累计经过时间和当前墙上时钟时间（精确到毫秒）
+4. **备注功能**: 为每个时间点添加文字说明（后续手动补充）
+5. **数据导出**: 支持导出为 CSV/JSON/TXT 格式，包含完整日期时间信息
+
+## 详细设计规范
+
+### 界面布局设计
+
+#### 主界面结构（屏幕高度比例）
+```
+┌──────────────────────────────┐
+│ 顶部栏 (5%)                  │  ← 标题 + 菜单 + 导出按钮
+├──────────────────────────────┤
+│ 时间显示区 (20%)             │  ← 计时器 + 墙上时钟（固定）
+├──────────────────────────────┤
+│                              │
+│ 记录列表区 (55%)             │  ← LazyColumn（可滚动）
+│                              │
+├──────────────────────────────┤
+│ 控制按钮区 (20%)             │  ← 操作按钮（固定）
+└──────────────────────────────┘
+```
+
+#### 时间显示区
+```
+           00:14.235           ← 主计时器（64sp，加粗）
+        13:47:37.306           ← 墙上时钟（24sp，次要颜色）
+```
+
+#### 记录卡片布局
+```
+┌─────────────────────────────────────┐
+│ 01            00:07.403              │  ← 序号 + 累计时间
+│ +00:07.403    13:47:30.474          │  ← 时间差 + 标记时刻
+│ 📝 第一圈完成                        │  ← 备注（可选）
+└─────────────────────────────────────┘
+```
+
+**字段说明**：
+- **序号**: 记录编号（01, 02, 03...）
+- **累计时间**: 从开始到该标记点的总时长（MM:SS.mmm）
+- **时间差**: 与上一个标记点的时间差（+MM:SS.mmm）
+- **标记时刻**: 标记时的系统时间（HH:mm:ss.SSS）
+- **备注**: 用户添加的文字说明（可选显示）
+
+### 操作流程设计
+
+#### 状态流转
+```
+[初始状态]
+  ↓ 点击"开始"
+[运行中] - 左:[标记] 右:[暂停]
+  ↓ 点击"暂停"
+[暂停] - 左:[继续] 右:[停止]
+  ↓ 点击"继续"
+[运行中] - 继续计时
+  ↓ 点击"暂停" → 点击"停止"
+[已停止] - 显示[重置]按钮
+  ↓ 点击"重置"
+[初始状态]
+```
+
+#### 标记操作（核心交互）
+1. **点击"标记"按钮** → 立即记录当前时间点
+2. 在列表顶部插入新记录卡片（带淡入动画）
+3. 计时器继续运行，完全不中断
+4. 列表自动滚动到顶部显示最新记录
+
+#### 备注编辑
+- **暂停或停止后**：点击记录卡片 → 弹出编辑对话框
+- 可添加/编辑备注文字
+- 可删除该条记录
+
+### 数据模型设计
+
+```kotlin
+// 时间记录
+data class TimeRecord(
+    val id: String = UUID.randomUUID().toString(),
+    val index: Int,                   // 序号
+    val wallClockTime: Long,          // 标记时的系统时间戳（毫秒）
+    val elapsedTimeNanos: Long,       // 累计经过时间（纳秒）
+    val splitTimeNanos: Long,         // 与上次的时间差（纳秒）
+    val note: String = ""             // 备注
+)
+
+// 秒表状态
+sealed class StopwatchStatus {
+    object Idle : StopwatchStatus()       // 初始状态
+    object Running : StopwatchStatus()    // 运行中
+    object Paused : StopwatchStatus()     // 暂停
+    object Stopped : StopwatchStatus()    // 停止（有记录）
+}
+
+// UI 状态
+data class StopwatchUiState(
+    val status: StopwatchStatus = StopwatchStatus.Idle,
+    val currentTime: String = "00:00.000",         // 格式化的计时器时间
+    val wallClockTime: String = "00:00:00.000",   // 格式化的墙上时钟
+    val currentTimeNanos: Long = 0L,               // 原始纳秒值
+    val records: List<TimeRecord> = emptyList()
+)
+```
+
+### 时间格式化规范
+
+```kotlin
+// 经过时间格式: MM:SS.mmm (分:秒.毫秒)
+formatElapsed(nanos) -> "00:07.403"
+
+// 时间差格式: +MM:SS.mmm
+formatSplit(nanos) -> "+00:07.403"
+
+// 墙上时钟格式: HH:mm:ss.SSS (时:分:秒.毫秒)
+formatWallClock(timestampMillis) -> "13:47:30.474"
+
+// 导出用完整时间: yyyy-MM-dd HH:mm:ss.SSS
+formatFullTimestamp(timestampMillis) -> "2025-11-10 13:47:30.474"
+```
+
+### 导出格式规范
+
+#### CSV 格式
+```csv
+序号,累计时间,时间差,标记时间,备注
+01,00:07.403,+00:07.403,2025-11-10 13:47:30.474,第一圈完成
+02,00:10.553,+00:03.150,2025-11-10 13:47:33.624,第二圈
+```
+
+#### JSON 格式
+```json
+{
+  "session": {
+    "totalTime": "00:12.055",
+    "recordCount": 3,
+    "exportTime": "2025-11-10 13:50:00.000"
+  },
+  "records": [
+    {
+      "index": 1,
+      "elapsedTime": "00:07.403",
+      "splitTime": "+00:07.403",
+      "markTime": "2025-11-10 13:47:30.474",
+      "note": "第一圈完成"
+    }
+  ]
+}
+```
+
+#### TXT 格式
+```
+ChronoMark 秒表记录
+导出时间: 2025-11-10 13:50:00
+总用时: 00:12.055
+记录数: 3
+
+────────────────────────────────────
+
+#01  累计: 00:07.403  差值: +00:07.403
+     时间: 2025-11-10 13:47:30.474
+     备注: 第一圈完成
+```
+
+### 视觉设计规范
+
+#### 字体大小
+- 主计时器: 64sp（加粗）
+- 墙上时钟: 24sp（常规）
+- 记录累计时间: 28sp（加粗）
+- 记录序号: 16sp（常规）
+- 记录时间差: 20sp（常规）
+- 记录时刻: 18sp（常规）
+- 备注: 16sp（常规）
+
+#### 颜色方案
+- 主时间: `#212121`（深黑）
+- 墙上时钟: `#757575`（灰色）
+- 时间差: `#FF6F00`（橙色）或 `#43A047`（绿色）
+- 序号/次要信息: `#616161`（中灰）
+- 备注: `#424242`（深灰）
+
+#### 间距规范
+- 卡片水平边距: 12dp
+- 卡片垂直间距: 8dp
+- 卡片内边距: 16dp
+- 时间显示区内部间距: 8dp
+- 按钮大小: 72dp 直径
+- 按钮间距: 48dp（中心到中心）
+
+### 实施路线图
+
+#### Phase 1: 基础计时功能
+1. 创建数据模型（TimeRecord, StopwatchStatus, UiState）
+2. 实现 TimeFormatter 工具类
+3. 创建 StopwatchViewModel 基础框架
+4. 实现主界面布局（时间显示区 + 按钮区）
+5. 实现基础计时逻辑（开始/暂停/继续/停止/重置）
+
+#### Phase 2: 时间点记录
+6. 实现标记功能（瞬间记录，不中断）
+7. 实现记录列表 UI（LazyColumn + RecordCard）
+8. 实现列表自动滚动到顶部
+9. 添加空状态显示
+
+#### Phase 3: 备注编辑
+10. 实现编辑备注对话框
+11. 实现点击记录卡片展开/编辑
+12. 实现删除记录功能
+
+#### Phase 4: 数据持久化
+13. 集成 DataStore 实现状态保存
+14. 实现应用重启后状态恢复
+15. 处理边缘情况（应用被杀死等）
+
+#### Phase 5: 导出功能
+16. 实现 ExportHelper 工具类
+17. 实现 CSV 导出
+18. 实现 JSON 导出
+19. 实现 TXT 导出
+20. 处理 Android 存储权限（Scoped Storage）
+
+#### Phase 6: 优化与完善
+21. 性能优化（确保毫秒级精度）
+22. UI/UX 打磨（动画、过渡效果）
+23. 添加单元测试
+24. 添加 UI 测试
+25. 完善错误处理和边缘情况
 
 ## 开发注意事项
 
@@ -123,6 +348,43 @@ app/src/main/java/io/github/chy5301/chronomark/
 ### 开发建议
 - 项目使用 Kotlin 作为主要开发语言
 - Compose UI 预览需要在 Android Studio 中启用 Compose Preview
-- 秒表计时建议使用 `System.nanoTime()` 获取高精度时间
-- 导出功能需要处理 Android 存储权限 (Android 10+ 使用 Scoped Storage)
-- 世界时间功能建议使用 `java.time` API (项目最低 SDK 24 已支持，无需额外库)
+- **高精度计时**: 使用 `System.nanoTime()` 获取纳秒级精度，确保毫秒显示准确
+- **时间格式化**: 使用 `java.time` API（项目最低 SDK 24 已支持，无需额外库）
+- **导出功能**: 需要处理 Android 存储权限（Android 10+ 使用 Scoped Storage）
+- **计时更新频率**: ViewModel 中使用协程每 10ms 更新一次 UI，确保流畅显示
+- **状态管理**: 使用 StateFlow 确保 UI 状态单向数据流
+- **传统秒表操作**: 标记操作必须瞬间完成，不能中断计时流程
+
+### 技术要点
+
+#### 高精度计时实现
+```kotlin
+// 使用 nanoTime() 而非 currentTimeMillis()
+private var startTimeNanos: Long = 0L
+private var pausedTimeNanos: Long = 0L
+
+fun getCurrentElapsedTime(): Long {
+    return System.nanoTime() - startTimeNanos - pausedTimeNanos
+}
+```
+
+#### 协程计时更新
+```kotlin
+private fun startTimerTicking() {
+    timerJob = viewModelScope.launch {
+        while (isActive) {
+            delay(10)  // 每 10ms 更新一次
+            updateCurrentTime()
+        }
+    }
+}
+```
+
+#### 时间格式化示例
+```kotlin
+// 使用 java.time API
+val instant = Instant.ofEpochMilli(timestampMillis)
+val formatter = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
+    .withZone(ZoneId.systemDefault())
+val formattedTime = formatter.format(instant)
+```
