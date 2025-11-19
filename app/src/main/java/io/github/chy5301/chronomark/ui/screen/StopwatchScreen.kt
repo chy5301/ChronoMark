@@ -3,15 +3,17 @@ package io.github.chy5301.chronomark.ui.screen
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -77,7 +79,7 @@ fun StopwatchScreen(
                 onMarkClick = { viewModel.addMark() },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(140.dp)
+                    .height(160.dp) // 增加高度以容纳大按钮
             )
         }
     }
@@ -236,97 +238,89 @@ fun ControlButtonsSection(
         when (status) {
             StopwatchStatus.Idle -> {
                 // 初始状态：只有开始按钮
-                FilledTonalButton(
+                ControlButton(
                     onClick = onStartClick,
-                    modifier = Modifier.size(72.dp)
-                ) {
-                    Text("▶")
-                }
+                    icon = Icons.Filled.PlayArrow,
+                    contentDescription = "开始"
+                )
             }
 
             StopwatchStatus.Running -> {
                 // 运行中：标记 + 暂停
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(48.dp),
+                    horizontalArrangement = Arrangement.spacedBy(80.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        FilledTonalButton(
-                            onClick = onMarkClick,
-                            modifier = Modifier.size(72.dp)
-                        ) {
-                            Text("🚩", fontSize = 24.sp)
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("标记", fontSize = 12.sp)
-                    }
-
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        FilledTonalButton(
-                            onClick = onPauseClick,
-                            modifier = Modifier.size(72.dp)
-                        ) {
-                            Text("⏸", fontSize = 24.sp)
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("暂停", fontSize = 12.sp)
-                    }
+                    ControlButton(
+                        onClick = onMarkClick,
+                        icon = Icons.Filled.Flag,
+                        contentDescription = "标记"
+                    )
+                    ControlButton(
+                        onClick = onPauseClick,
+                        icon = Icons.Filled.Pause,
+                        contentDescription = "暂停"
+                    )
                 }
             }
 
             StopwatchStatus.Paused -> {
                 // 暂停：继续 + 停止
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(48.dp),
+                    horizontalArrangement = Arrangement.spacedBy(80.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        FilledTonalButton(
-                            onClick = onResumeClick,
-                            modifier = Modifier.size(72.dp)
-                        ) {
-                            Text("▶", fontSize = 24.sp)
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("继续", fontSize = 12.sp)
-                    }
-
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        FilledTonalButton(
-                            onClick = onStopClick,
-                            modifier = Modifier.size(72.dp)
-                        ) {
-                            Text("⏹", fontSize = 24.sp)
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("停止", fontSize = 12.sp)
-                    }
+                    ControlButton(
+                        onClick = onResumeClick,
+                        icon = Icons.Filled.PlayArrow,
+                        contentDescription = "继续"
+                    )
+                    ControlButton(
+                        onClick = onStopClick,
+                        icon = Icons.Filled.Stop,
+                        contentDescription = "停止"
+                    )
                 }
             }
 
             StopwatchStatus.Stopped -> {
                 // 停止：重置
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    FilledTonalButton(
-                        onClick = onResetClick,
-                        modifier = Modifier.size(72.dp)
-                    ) {
-                        Text("↻", fontSize = 24.sp)
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text("重置", fontSize = 12.sp)
-                }
+                ControlButton(
+                    onClick = onResetClick,
+                    icon = Icons.Filled.Refresh,
+                    contentDescription = "重置"
+                )
             }
         }
+    }
+}
+
+/**
+ * 统一样式的控制按钮
+ */
+@Composable
+fun ControlButton(
+    onClick: () -> Unit,
+    icon: ImageVector,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.surface,
+    contentColor: Color = MaterialTheme.colorScheme.primary
+) {
+    ElevatedButton(
+        onClick = onClick,
+        modifier = modifier.size(80.dp),
+        shape = CircleShape,
+        colors = ButtonDefaults.elevatedButtonColors(
+            containerColor = containerColor,
+            contentColor = contentColor
+        ),
+        elevation = ButtonDefaults.elevatedButtonElevation(defaultElevation = 4.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            modifier = Modifier.size(32.dp)
+        )
     }
 }
