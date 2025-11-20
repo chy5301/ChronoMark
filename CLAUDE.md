@@ -8,7 +8,15 @@ ChronoMark 是一个基于 Jetpack Compose 的 Android 秒表应用，采用简�
 
 ## 项目状态
 
-**当前阶段**: 项目初始化完成，详细设计已确定，准备开始功能开发
+**当前阶段**: Phase 1 & 2 核心功能已完成，准备开发备注编辑和数据持久化功能
+
+### 已完成功能
+- 高精度计时（毫秒级，使用 nanoTime）
+- 基础计时操作（开始/暂停/继续/停止/重置）
+- 时间点标记功能
+- 双时间显示（计时器 + 墙上时钟）
+- 记录列表 UI（LazyColumn + RecordCard）
+- 控制按钮 UI 优化
 
 ## 技术栈
 
@@ -24,11 +32,23 @@ ChronoMark 是一个基于 Jetpack Compose 的 Android 秒表应用，采用简�
 
 ```
 app/src/main/java/io/github/chy5301/chronomark/
-├── MainActivity.kt           # 主入口 Activity
-└── ui/theme/                # Compose 主题配置
-    ├── Color.kt
-    ├── Theme.kt
-    └── Type.kt
+├── MainActivity.kt              # 主入口 Activity
+├── data/
+│   └── model/
+│       ├── TimeRecord.kt        # 时间记录数据模型
+│       ├── StopwatchStatus.kt   # 秒表状态枚举
+│       └── StopwatchUiState.kt  # UI 状态数据类
+├── ui/
+│   ├── screen/
+│   │   └── StopwatchScreen.kt   # 秒表主屏幕及所有 UI 组件
+│   └── theme/                   # Compose 主题配置
+│       ├── Color.kt
+│       ├── Theme.kt
+│       └── Type.kt
+├── util/
+│   └── TimeFormatter.kt         # 时间格式化工具类
+└── viewmodel/
+    └── StopwatchViewModel.kt    # 秒表业务逻辑和状态管理
 ```
 
 ## 常用命令
@@ -80,27 +100,13 @@ app/src/main/java/io/github/chy5301/chronomark/
 2. 在 `[libraries]` 或 `[plugins]` 部分定义依赖
 3. 在 `app/build.gradle.kts` 中通过 `libs.` 引用
 
-## 规划的项目架构
+## 项目架构
 
 ### 架构模式
 - **MVVM (Model-View-ViewModel)** 配合 Jetpack Compose
 - 使用 `ViewModel` 管理 UI 状态和业务逻辑
 - 使用 `StateFlow` 进行状态管理
-
-### 规划的目录结构
-```
-app/src/main/java/io/github/chy5301/chronomark/
-├── data/              # 数据层
-│   ├── model/        # 数据模型(TimeRecord, WorldTime 等)
-│   ├── repository/   # 数据仓库
-│   └── local/        # 本地存储(Room 数据库或 DataStore)
-├── ui/
-│   ├── screen/       # 各个屏幕的 Composable
-│   ├── component/    # 可复用的 UI 组件
-│   └── theme/        # Compose 主题配置 (已有)
-├── viewmodel/        # ViewModel 层
-└── util/             # 工具类(时间格式化、导出等)
-```
+- 使用 Coroutines 处理异步操作和计时更新
 
 ### 核心功能模块
 
@@ -114,18 +120,18 @@ app/src/main/java/io/github/chy5301/chronomark/
 
 ### 界面布局设计
 
-#### 主界面结构（屏幕高度比例）
+#### 主界面结构
 ```
 ┌──────────────────────────────┐
-│ 顶部栏 (5%)                  │  ← 标题 + 菜单 + 导出按钮
+│ 顶部栏 (TopAppBar)           │  ← 标题"秒表" + 导出按钮 + 菜单按钮
 ├──────────────────────────────┤
-│ 时间显示区 (20%)             │  ← 计时器 + 墙上时钟（固定）
+│ 时间显示区 (160.dp)          │  ← 计时器 + 墙上时钟（固定高度）
 ├──────────────────────────────┤
 │                              │
-│ 记录列表区 (55%)             │  ← LazyColumn（可滚动）
+│ 记录列表区 (weight 1f)       │  ← LazyColumn（可滚动，占据剩余空间）
 │                              │
 ├──────────────────────────────┤
-│ 控制按钮区 (20%)             │  ← 操作按钮（固定）
+│ 控制按钮区 (160.dp)          │  ← 操作按钮（固定高度）
 └──────────────────────────────┘
 ```
 
@@ -284,39 +290,42 @@ ChronoMark 秒表记录
 - 备注: 16sp（常规）
 
 #### 颜色方案
-- 主时间: `#212121`（深黑）
-- 墙上时钟: `#757575`（灰色）
-- 时间差: `#FF6F00`（橙色）或 `#43A047`（绿色）
-- 序号/次要信息: `#616161`（中灰）
-- 备注: `#424242`（深灰）
+使用 Material3 动态主题色，支持亮色/深色主题自适应：
+- 主时间: `MaterialTheme.colorScheme.onSurface`
+- 墙上时钟: `MaterialTheme.colorScheme.onSurfaceVariant`
+- 时间差: `MaterialTheme.colorScheme.tertiary`
+- 序号/次要信息: `MaterialTheme.colorScheme.onSurfaceVariant`
+- 备注: `MaterialTheme.colorScheme.onSurface`
+- 按钮背景: `MaterialTheme.colorScheme.surface`
+- 按钮图标: `MaterialTheme.colorScheme.primary`
 
 #### 间距规范
 - 卡片水平边距: 12dp
 - 卡片垂直间距: 8dp
 - 卡片内边距: 16dp
 - 时间显示区内部间距: 8dp
-- 按钮大小: 72dp 直径
-- 按钮间距: 48dp（中心到中心）
+- 按钮大小: 80dp 直径
+- 按钮间距: 80dp（spacedBy）
 
 ### 实施路线图
 
-#### Phase 1: 基础计时功能
-1. 创建数据模型（TimeRecord, StopwatchStatus, UiState）
-2. 实现 TimeFormatter 工具类
-3. 创建 StopwatchViewModel 基础框架
-4. 实现主界面布局（时间显示区 + 按钮区）
-5. 实现基础计时逻辑（开始/暂停/继续/停止/重置）
+#### Phase 1: 基础计时功能 ✅ 已完成
+1. ✅ 创建数据模型（TimeRecord, StopwatchStatus, UiState）
+2. ✅ 实现 TimeFormatter 工具类
+3. ✅ 创建 StopwatchViewModel 基础框架
+4. ✅ 实现主界面布局（时间显示区 + 按钮区）
+5. ✅ 实现基础计时逻辑（开始/暂停/继续/停止/重置）
 
-#### Phase 2: 时间点记录
-6. 实现标记功能（瞬间记录，不中断）
-7. 实现记录列表 UI（LazyColumn + RecordCard）
-8. 实现列表自动滚动到顶部
-9. 添加空状态显示
+#### Phase 2: 时间点记录 ✅ 已完成
+6. ✅ 实现标记功能（瞬间记录，不中断）
+7. ✅ 实现记录列表 UI（LazyColumn + RecordCard）
+8. ✅ 实现列表自动滚动到顶部
+9. ✅ 添加空状态显示
 
-#### Phase 3: 备注编辑
-10. 实现编辑备注对话框
-11. 实现点击记录卡片展开/编辑
-12. 实现删除记录功能
+#### Phase 3: 备注编辑 ✅ 已完成
+10. ✅ 实现编辑备注对话框（EditRecordDialog）
+11. ✅ 实现点击记录卡片展开/编辑（仅暂停/停止状态可编辑）
+12. ✅ 实现删除记录功能（带二次确认）
 
 #### Phase 4: 数据持久化
 13. 集成 DataStore 实现状态保存

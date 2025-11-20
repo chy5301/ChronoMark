@@ -1,5 +1,6 @@
 package io.github.chy5301.chronomark.ui.screen
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -7,9 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -19,6 +18,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.chy5301.chronomark.data.model.StopwatchStatus
+import io.github.chy5301.chronomark.data.model.TimeRecord
+import io.github.chy5301.chronomark.util.TimeFormatter
 import io.github.chy5301.chronomark.viewmodel.StopwatchViewModel
 
 /**
@@ -30,6 +31,53 @@ fun StopwatchScreen(
     viewModel: StopwatchViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var selectedRecord by remember { mutableStateOf<TimeRecord?>(null) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    // 判断是否可编辑（暂停或停止状态）
+    val isEditable = uiState.status == StopwatchStatus.Paused ||
+                     uiState.status == StopwatchStatus.Stopped
+
+    // 编辑对话框
+    selectedRecord?.let { record ->
+        EditRecordDialog(
+            record = record,
+            onDismiss = { selectedRecord = null },
+            onSave = { note ->
+                viewModel.updateRecordNote(record.id, note)
+                selectedRecord = null
+            },
+            onDeleteRequest = { showDeleteConfirm = true }
+        )
+    }
+
+    // 删除确认对话框
+    if (showDeleteConfirm && selectedRecord != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("确认删除") },
+            text = { Text("确定要删除记录 #${"%02d".format(selectedRecord!!.index)} 吗？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteRecord(selectedRecord!!.id)
+                        showDeleteConfirm = false
+                        selectedRecord = null
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("删除")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -63,6 +111,8 @@ fun StopwatchScreen(
             // 记录列表区
             RecordsListSection(
                 records = uiState.records,
+                isEditable = isEditable,
+                onRecordClick = { record -> selectedRecord = record },
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
@@ -123,7 +173,9 @@ fun TimeDisplaySection(
  */
 @Composable
 fun RecordsListSection(
-    records: List<io.github.chy5301.chronomark.data.model.TimeRecord>,
+    records: List<TimeRecord>,
+    isEditable: Boolean,
+    onRecordClick: (TimeRecord) -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (records.isEmpty()) {
@@ -144,7 +196,11 @@ fun RecordsListSection(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(records) { record ->
-                RecordCard(record = record)
+                RecordCard(
+                    record = record,
+                    isEditable = isEditable,
+                    onClick = { onRecordClick(record) }
+                )
             }
         }
     }
@@ -155,11 +211,21 @@ fun RecordsListSection(
  */
 @Composable
 fun RecordCard(
-    record: io.github.chy5301.chronomark.data.model.TimeRecord,
+    record: TimeRecord,
+    isEditable: Boolean,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .then(
+                if (isEditable) {
+                    Modifier.clickable(onClick = onClick)
+                } else {
+                    Modifier
+                }
+            ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -177,7 +243,7 @@ fun RecordCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = io.github.chy5301.chronomark.util.TimeFormatter.formatElapsed(record.elapsedTimeNanos),
+                    text = TimeFormatter.formatElapsed(record.elapsedTimeNanos),
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -193,12 +259,12 @@ fun RecordCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = io.github.chy5301.chronomark.util.TimeFormatter.formatSplit(record.splitTimeNanos),
+                    text = TimeFormatter.formatSplit(record.splitTimeNanos),
                     fontSize = 20.sp,
                     color = MaterialTheme.colorScheme.tertiary
                 )
                 Text(
-                    text = io.github.chy5301.chronomark.util.TimeFormatter.formatWallClock(record.wallClockTime),
+                    text = TimeFormatter.formatWallClock(record.wallClockTime),
                     fontSize = 18.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -323,4 +389,75 @@ fun ControlButton(
             modifier = Modifier.size(32.dp)
         )
     }
+}
+
+/**
+ * 编辑记录对话框
+ */
+@Composable
+fun EditRecordDialog(
+    record: TimeRecord,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit,
+    onDeleteRequest: () -> Unit
+) {
+    var noteText by remember(record.id) { mutableStateOf(record.note) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("编辑记录 #${"%02d".format(record.index)}")
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // 只读信息
+                Text(
+                    text = "累计时间: ${TimeFormatter.formatElapsed(record.elapsedTimeNanos)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "标记时刻: ${TimeFormatter.formatWallClock(record.wallClockTime)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 备注输入框
+                OutlinedTextField(
+                    value = noteText,
+                    onValueChange = { noteText = it },
+                    label = { Text("备注") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 3
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(noteText) }) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            Row {
+                // 删除按钮
+                TextButton(
+                    onClick = onDeleteRequest,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("删除")
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                // 取消按钮
+                TextButton(onClick = onDismiss) {
+                    Text("取消")
+                }
+            }
+        }
+    )
 }
