@@ -34,10 +34,6 @@ fun StopwatchScreen(
     var selectedRecord by remember { mutableStateOf<TimeRecord?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    // 判断是否可编辑（暂停或停止状态）
-    val isEditable = uiState.status == StopwatchStatus.Paused ||
-                     uiState.status == StopwatchStatus.Stopped
-
     // 编辑对话框
     selectedRecord?.let { record ->
         EditRecordDialog(
@@ -111,7 +107,6 @@ fun StopwatchScreen(
             // 记录列表区
             RecordsListSection(
                 records = uiState.records,
-                isEditable = isEditable,
                 onRecordClick = { record -> selectedRecord = record },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -174,7 +169,6 @@ fun TimeDisplaySection(
 @Composable
 fun RecordsListSection(
     records: List<TimeRecord>,
-    isEditable: Boolean,
     onRecordClick: (TimeRecord) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -198,7 +192,6 @@ fun RecordsListSection(
             items(records) { record ->
                 RecordCard(
                     record = record,
-                    isEditable = isEditable,
                     onClick = { onRecordClick(record) }
                 )
             }
@@ -212,20 +205,13 @@ fun RecordsListSection(
 @Composable
 fun RecordCard(
     record: TimeRecord,
-    isEditable: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .then(
-                if (isEditable) {
-                    Modifier.clickable(onClick = onClick)
-                } else {
-                    Modifier
-                }
-            ),
+            .clickable(onClick = onClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
