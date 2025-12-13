@@ -94,7 +94,7 @@ fun StopwatchScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(top = paddingValues.calculateTopPadding())
         ) {
             // 时间显示区
             TimeDisplaySection(
@@ -125,7 +125,7 @@ fun StopwatchScreen(
                 onMarkClick = { viewModel.addMark() },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(120.dp)
+                    .height(96.dp)
             )
         }
     }
@@ -295,8 +295,8 @@ fun ControlButtonsSection(
     modifier: Modifier = Modifier
 ) {
     Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center
+        modifier = modifier.padding(top = 4.dp),
+        contentAlignment = Alignment.TopCenter
     ) {
         when (status) {
             StopwatchStatus.Idle -> {

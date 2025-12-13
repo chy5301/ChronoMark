@@ -118,7 +118,7 @@ fun EventScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(top = paddingValues.calculateTopPadding())
         ) {
             // 时间显示区（仅墙上时钟）
             EventTimeDisplaySection(
@@ -143,7 +143,7 @@ fun EventScreen(
                 onResetClick = { showResetConfirm = true },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(120.dp)
+                    .height(96.dp)
             )
         }
     }
@@ -219,7 +219,16 @@ fun EventRecordsListSection(
         // 当记录列表变化时，自动滚动到末尾
         LaunchedEffect(records.size) {
             if (records.isNotEmpty()) {
-                listState.animateScrollToItem(records.size - 1)
+                val lastIndex = records.size - 1
+                val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+
+                // 如果已经在底部（最后一个或倒数第二个可见），直接跳转避免抖动
+                if (lastVisibleIndex >= lastIndex - 1) {
+                    listState.scrollToItem(lastIndex)
+                } else {
+                    // 否则使用动画滚动
+                    listState.animateScrollToItem(lastIndex)
+                }
             }
         }
 
@@ -313,8 +322,8 @@ fun EventControlButtonsSection(
     modifier: Modifier = Modifier
 ) {
     Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center
+        modifier = modifier.padding(top = 4.dp),
+        contentAlignment = Alignment.TopCenter
     ) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(80.dp),

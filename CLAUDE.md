@@ -133,7 +133,7 @@ app/src/main/java/io/github/chy5301/chronomark/
 │ 记录列表区 (weight 1f)       │  ← LazyColumn（可滚动，占据剩余空间）
 │                              │
 ├──────────────────────────────┤
-│ 控制按钮区 (160.dp)          │  ← 操作按钮（固定高度）
+│ 控制按钮区 (96.dp)           │  ← 操作按钮（固定高度）
 ├──────────────────────────────┤
 │   📋事件        ⏱️秒表      │  ← 底部导航栏（NavigationBar）
 └──────────────────────────────┘
@@ -342,6 +342,56 @@ ChronoMark 秒表记录
 - 时间显示区内部间距: 8dp
 - 按钮大小: 80dp 直径
 - 按钮间距: 80dp（spacedBy）
+
+### 布局实现细节
+
+#### Scaffold 嵌套处理
+应用使用了嵌套 Scaffold 结构：
+- **MainScreen**: 外层 Scaffold，管理 bottomBar (NavigationBar)
+- **EventScreen/StopwatchScreen**: 内层 Scaffold，管理各自的 topBar (TopAppBar)
+
+**关键实现**:
+```kotlin
+// MainScreen: 应用外层 Scaffold 的 paddingValues
+Box(modifier = Modifier.padding(paddingValues))
+
+// EventScreen/StopwatchScreen: 只应用顶部 padding，避免双重底部间距
+Column(modifier = Modifier.padding(top = paddingValues.calculateTopPadding()))
+```
+
+#### 控制按钮区域对齐
+控制按钮区域（96.dp）使用 `TopCenter` 对齐，确保上下留白平衡：
+- `contentAlignment = Alignment.TopCenter` - 按钮靠近顶部
+- `padding(top = 4.dp)` - 保持与记录列表的小间距
+- 下边留白由 MainScreen 的 bottomBar padding 自然形成
+
+#### 自动滚动优化
+**秒表模式**: 倒序排列，新记录在索引 0
+```kotlin
+LaunchedEffect(records.size) {
+    if (records.isNotEmpty()) {
+        listState.animateScrollToItem(0)  // 滚动到顶部
+    }
+}
+```
+
+**事件模式**: 正序排列，新记录在末尾，需避免抖动
+```kotlin
+LaunchedEffect(records.size) {
+    if (records.isNotEmpty()) {
+        val lastIndex = records.size - 1
+        val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+
+        // 已在底部 → 直接跳转（无动画，避免抖动）
+        if (lastVisibleIndex >= lastIndex - 1) {
+            listState.scrollToItem(lastIndex)
+        } else {
+            // 不在底部 → 使用动画滚动
+            listState.animateScrollToItem(lastIndex)
+        }
+    }
+}
+```
 
 ### 实施路线图
 
