@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import io.github.chy5301.chronomark.ui.screen.StopwatchScreen
+import io.github.chy5301.chronomark.ui.screen.MainScreen
 import io.github.chy5301.chronomark.ui.theme.ChronoMarkTheme
 
 class MainActivity : ComponentActivity() {
@@ -13,7 +13,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             ChronoMarkTheme {
-                StopwatchScreen()
+                MainScreen()
             }
         }
     }

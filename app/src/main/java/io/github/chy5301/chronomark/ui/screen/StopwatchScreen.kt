@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -124,7 +125,7 @@ fun StopwatchScreen(
                 onMarkClick = { viewModel.addMark() },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(160.dp) // 增加高度以容纳大按钮
+                    .height(120.dp)
             )
         }
     }
@@ -184,8 +185,18 @@ fun RecordsListSection(
             )
         }
     } else {
+        val listState = rememberLazyListState()
+
+        // 当记录列表变化时，自动滚动到顶部（倒序排列，最新记录在索引 0）
+        LaunchedEffect(records.size) {
+            if (records.isNotEmpty()) {
+                listState.animateScrollToItem(0)
+            }
+        }
+
         LazyColumn(
             modifier = modifier,
+            state = listState,
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
