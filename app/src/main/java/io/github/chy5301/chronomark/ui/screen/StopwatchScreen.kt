@@ -14,23 +14,29 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import io.github.chy5301.chronomark.data.DataStoreManager
 import io.github.chy5301.chronomark.data.model.StopwatchStatus
 import io.github.chy5301.chronomark.data.model.TimeRecord
 import io.github.chy5301.chronomark.util.TimeFormatter
 import io.github.chy5301.chronomark.viewmodel.StopwatchViewModel
+import io.github.chy5301.chronomark.viewmodel.StopwatchViewModelFactory
 
 /**
  * 秒表主屏幕
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StopwatchScreen(
-    viewModel: StopwatchViewModel = viewModel()
-) {
+fun StopwatchScreen() {
+    val context = LocalContext.current
+    val dataStoreManager = remember { DataStoreManager(context) }
+    val viewModel: StopwatchViewModel = viewModel(
+        factory = StopwatchViewModelFactory(dataStoreManager)
+    )
     val uiState by viewModel.uiState.collectAsState()
     var selectedRecord by remember { mutableStateOf<TimeRecord?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }

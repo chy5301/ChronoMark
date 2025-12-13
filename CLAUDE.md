@@ -8,15 +8,19 @@ ChronoMark 是一个基于 Jetpack Compose 的 Android 秒表应用，采用简�
 
 ## 项目状态
 
-**当前阶段**: Phase 1 & 2 核心功能已完成，准备开发备注编辑和数据持久化功能
+**当前阶段**: Phase 5 数据持久化已完成，准备开发导出功能
 
 ### 已完成功能
-- 高精度计时（毫秒级，使用 nanoTime）
-- 基础计时操作（开始/暂停/继续/停止/重置）
-- 时间点标记功能
-- 双时间显示（计时器 + 墙上时钟）
-- 记录列表 UI（LazyColumn + RecordCard）
-- 控制按钮 UI 优化
+- ✅ 高精度计时（毫秒级，使用 nanoTime）
+- ✅ 基础计时操作（开始/暂停/继续/停止/重置）
+- ✅ 时间点标记功能
+- ✅ 双时间显示（计时器 + 墙上时钟）
+- ✅ 记录列表 UI（LazyColumn + RecordCard）
+- ✅ 控制按钮 UI 优化
+- ✅ 备注编辑功能（点击记录卡片编辑/删除）
+- ✅ 事件模式（简化的时间点记录）
+- ✅ 秒表/事件双模式切换（底部导航栏）
+- ✅ 数据持久化（DataStore，应用重启后恢复状态）
 
 ## 技术栈
 
@@ -425,23 +429,18 @@ LaunchedEffect(records.size) {
 21. ✅ 两种模式数据分开存储
 22. ✅ 更新 MainActivity 使用 MainScreen
 
-#### Phase 5: 数据持久化
-**目标**: 实现应用状态的持久化保存，确保应用重启后能恢复之前的状态。
-
-**技术选型**: DataStore (Preferences DataStore)
-
-**核心任务**:
-23. 集成 DataStore 依赖，创建数据模型
-24. 实现秒表模式数据持久化（状态、时间、记录列表）
-25. 实现事件模式数据持久化（记录列表）
-26. 实现应用设置持久化（当前模式）
-27. 实现状态恢复逻辑（ViewModel 启动时加载）
-28. 处理边缘情况（应用被杀死、数据损坏、版本升级）
-
-**技术要点**:
-- 使用 JSON 序列化存储 TimeRecord 列表
-- Running 状态下需重新计算经过时间
-- 提供清除数据功能（重置应用）
+#### Phase 5: 数据持久化 ✅ 已完成
+23. ✅ 集成 DataStore 依赖和 Kotlinx Serialization
+24. ✅ 创建 DataStoreManager 工具类
+25. ✅ 为 TimeRecord 添加序列化注解
+26. ✅ 实现秒表模式数据持久化（状态、时间、记录列表）
+27. ✅ 实现事件模式数据持久化（记录列表）
+28. ✅ 实现应用设置持久化（当前模式）
+29. ✅ 在 StopwatchViewModel 中实现状态恢复逻辑
+30. ✅ 在 EventViewModel 中实现状态恢复逻辑
+31. ✅ 处理边缘情况（Running 状态自动转为 Paused）
+32. ✅ 创建 ViewModelFactory 支持依赖注入
+33. ✅ 更新所有 Screen 使用新的 ViewModelFactory
 
 #### Phase 6: 导出功能
 **目标**: 实现将记录导出为 CSV/JSON/TXT 格式，支持分享到其他应用。

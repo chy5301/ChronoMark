@@ -1,5 +1,6 @@
 package io.github.chy5301.chronomark.data.model
 
+import kotlinx.serialization.Serializable
 import java.util.UUID
 
 /**
@@ -12,6 +13,7 @@ import java.util.UUID
  * @property splitTimeNanos 与上次标记的时间差（纳秒）
  * @property note 备注
  */
+@Serializable
 data class TimeRecord(
     val id: String = UUID.randomUUID().toString(),
     val index: Int,

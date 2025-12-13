@@ -2,6 +2,7 @@ package io.github.chy5301.chronomark.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.chy5301.chronomark.data.DataStoreManager
 import io.github.chy5301.chronomark.data.model.EventUiState
 import io.github.chy5301.chronomark.data.model.TimeRecord
 import io.github.chy5301.chronomark.util.TimeFormatter
@@ -10,6 +11,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -17,7 +19,9 @@ import kotlinx.coroutines.launch
 /**
  * 事件模式 ViewModel
  */
-class EventViewModel : ViewModel() {
+class EventViewModel(
+    private val dataStoreManager: DataStoreManager
+) : ViewModel() {
 
     // UI 状态
     private val _uiState = MutableStateFlow(EventUiState())
@@ -29,6 +33,8 @@ class EventViewModel : ViewModel() {
     init {
         // 启动墙上时钟更新（始终运行）
         startWallClockTicking()
+        // 加载保存的记录
+        loadSavedRecords()
     }
 
     /**
@@ -50,6 +56,7 @@ class EventViewModel : ViewModel() {
         _uiState.update {
             it.copy(records = it.records + listOf(newRecord))
         }
+        saveRecords()
     }
 
     /**
@@ -61,6 +68,10 @@ class EventViewModel : ViewModel() {
                 wallClockTime = TimeFormatter.formatWallClockWithDate(System.currentTimeMillis()),
                 records = emptyList()
             )
+        }
+        // 清除保存的数据
+        viewModelScope.launch {
+            dataStoreManager.clearEventData()
         }
     }
 
@@ -75,6 +86,7 @@ class EventViewModel : ViewModel() {
                 }
             )
         }
+        saveRecords()
     }
 
     /**
@@ -89,6 +101,7 @@ class EventViewModel : ViewModel() {
             }
             state.copy(records = reindexedRecords)
         }
+        saveRecords()
     }
 
     /**
@@ -113,8 +126,31 @@ class EventViewModel : ViewModel() {
         }
     }
 
+    /**
+     * 加载保存的记录
+     */
+    private fun loadSavedRecords() {
+        viewModelScope.launch {
+            val savedRecords = dataStoreManager.eventRecordsFlow.first()
+            _uiState.update {
+                it.copy(records = savedRecords)
+            }
+        }
+    }
+
+    /**
+     * 保存记录
+     */
+    private fun saveRecords() {
+        viewModelScope.launch {
+            dataStoreManager.saveEventRecords(_uiState.value.records)
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
+        // 保存记录
+        saveRecords()
         wallClockJob?.cancel()
         wallClockJob = null
     }

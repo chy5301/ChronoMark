@@ -2,6 +2,7 @@ package io.github.chy5301.chronomark.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.chy5301.chronomark.data.DataStoreManager
 import io.github.chy5301.chronomark.data.model.StopwatchStatus
 import io.github.chy5301.chronomark.data.model.StopwatchUiState
 import io.github.chy5301.chronomark.data.model.TimeRecord
@@ -11,6 +12,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -18,7 +20,9 @@ import kotlinx.coroutines.launch
 /**
  * 秒表 ViewModel
  */
-class StopwatchViewModel : ViewModel() {
+class StopwatchViewModel(
+    private val dataStoreManager: DataStoreManager
+) : ViewModel() {
 
     // UI 状态
     private val _uiState = MutableStateFlow(StopwatchUiState())
@@ -38,6 +42,8 @@ class StopwatchViewModel : ViewModel() {
     init {
         // 启动墙上时钟更新（始终运行）
         startWallClockTicking()
+        // 加载保存的状态
+        loadSavedState()
     }
 
     /**
@@ -50,6 +56,7 @@ class StopwatchViewModel : ViewModel() {
         totalPausedTimeNanos = 0L
         _uiState.update { it.copy(status = StopwatchStatus.Running) }
         startTimerTicking()
+        saveCurrentState()
     }
 
     /**
@@ -61,6 +68,7 @@ class StopwatchViewModel : ViewModel() {
         pausedTimeNanos = System.nanoTime()
         _uiState.update { it.copy(status = StopwatchStatus.Paused) }
         stopTimerTicking()
+        saveCurrentState()
     }
 
     /**
@@ -73,6 +81,7 @@ class StopwatchViewModel : ViewModel() {
         totalPausedTimeNanos += pauseDuration
         _uiState.update { it.copy(status = StopwatchStatus.Running) }
         startTimerTicking()
+        saveCurrentState()
     }
 
     /**
@@ -83,6 +92,7 @@ class StopwatchViewModel : ViewModel() {
 
         _uiState.update { it.copy(status = StopwatchStatus.Stopped) }
         stopTimerTicking()
+        saveCurrentState()
     }
 
     /**
@@ -101,6 +111,10 @@ class StopwatchViewModel : ViewModel() {
                 currentTimeNanos = 0L,
                 records = emptyList()
             )
+        }
+        // 清除保存的数据
+        viewModelScope.launch {
+            dataStoreManager.clearStopwatchData()
         }
     }
 
@@ -126,6 +140,7 @@ class StopwatchViewModel : ViewModel() {
         _uiState.update {
             it.copy(records = listOf(newRecord) + it.records)
         }
+        saveCurrentState()
     }
 
     /**
@@ -139,6 +154,7 @@ class StopwatchViewModel : ViewModel() {
                 }
             )
         }
+        saveCurrentState()
     }
 
     /**
@@ -153,6 +169,7 @@ class StopwatchViewModel : ViewModel() {
             }
             state.copy(records = reindexedRecords)
         }
+        saveCurrentState()
     }
 
     /**
@@ -218,8 +235,101 @@ class StopwatchViewModel : ViewModel() {
         }
     }
 
+    /**
+     * 加载保存的状态
+     */
+    private fun loadSavedState() {
+        viewModelScope.launch {
+            // 加载状态
+            val savedStatus = dataStoreManager.stopwatchStatusFlow.first()
+            val savedTime = dataStoreManager.stopwatchTimeFlow.first()
+            val savedRecords = dataStoreManager.stopwatchRecordsFlow.first()
+
+            // 恢复时间变量
+            startTimeNanos = savedTime.startTimeNanos
+            totalPausedTimeNanos = savedTime.pausedTimeNanos
+
+            // 处理不同状态的恢复
+            when (savedStatus) {
+                is StopwatchStatus.Idle -> {
+                    // 保持默认状态
+                }
+                is StopwatchStatus.Running -> {
+                    // Running 状态需要特殊处理：
+                    // 如果应用被杀死或重启，Running 状态会变为 Paused
+                    // 因为无法准确恢复运行中的计时
+                    _uiState.update {
+                        it.copy(
+                            status = StopwatchStatus.Paused,
+                            records = savedRecords
+                        )
+                    }
+                    // 计算暂停时的时间
+                    pausedTimeNanos = System.nanoTime()
+                    val elapsedAtPause = savedTime.pauseTimestamp - startTimeNanos - totalPausedTimeNanos
+                    totalPausedTimeNanos = System.nanoTime() - startTimeNanos - elapsedAtPause
+                    updateCurrentTime()
+                }
+                is StopwatchStatus.Paused -> {
+                    _uiState.update {
+                        it.copy(
+                            status = StopwatchStatus.Paused,
+                            records = savedRecords
+                        )
+                    }
+                    pausedTimeNanos = System.nanoTime()
+                    val elapsedAtPause = savedTime.pauseTimestamp - startTimeNanos - totalPausedTimeNanos
+                    totalPausedTimeNanos = System.nanoTime() - startTimeNanos - elapsedAtPause
+                    updateCurrentTime()
+                }
+                is StopwatchStatus.Stopped -> {
+                    _uiState.update {
+                        it.copy(
+                            status = StopwatchStatus.Stopped,
+                            records = savedRecords
+                        )
+                    }
+                    pausedTimeNanos = System.nanoTime()
+                    val elapsedAtPause = savedTime.pauseTimestamp - startTimeNanos - totalPausedTimeNanos
+                    totalPausedTimeNanos = System.nanoTime() - startTimeNanos - elapsedAtPause
+                    updateCurrentTime()
+                }
+            }
+        }
+    }
+
+    /**
+     * 保存当前状态
+     */
+    private fun saveCurrentState() {
+        viewModelScope.launch {
+            val currentState = _uiState.value
+
+            // 保存状态
+            dataStoreManager.saveStopwatchStatus(currentState.status)
+
+            // 保存记录
+            dataStoreManager.saveStopwatchRecords(currentState.records)
+
+            // 保存时间数据
+            val pauseTimestamp = when (currentState.status) {
+                is StopwatchStatus.Paused, is StopwatchStatus.Stopped -> {
+                    startTimeNanos + totalPausedTimeNanos + currentState.currentTimeNanos
+                }
+                else -> 0L
+            }
+            dataStoreManager.saveStopwatchTime(
+                startTimeNanos = startTimeNanos,
+                pausedTimeNanos = totalPausedTimeNanos,
+                pauseTimestamp = pauseTimestamp
+            )
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
+        // 保存状态
+        saveCurrentState()
         stopTimerTicking()
         wallClockJob?.cancel()
         wallClockJob = null

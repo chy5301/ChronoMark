@@ -11,22 +11,28 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import io.github.chy5301.chronomark.data.DataStoreManager
 import io.github.chy5301.chronomark.data.model.TimeRecord
 import io.github.chy5301.chronomark.util.TimeFormatter
 import io.github.chy5301.chronomark.viewmodel.EventViewModel
+import io.github.chy5301.chronomark.viewmodel.EventViewModelFactory
 
 /**
  * 事件模式主屏幕
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EventScreen(
-    viewModel: EventViewModel = viewModel()
-) {
+fun EventScreen() {
+    val context = LocalContext.current
+    val dataStoreManager = remember { DataStoreManager(context) }
+    val viewModel: EventViewModel = viewModel(
+        factory = EventViewModelFactory(dataStoreManager)
+    )
     val uiState by viewModel.uiState.collectAsState()
     var selectedRecord by remember { mutableStateOf<TimeRecord?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
