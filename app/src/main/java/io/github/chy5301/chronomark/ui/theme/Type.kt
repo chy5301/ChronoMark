@@ -1,6 +1,7 @@
 package io.github.chy5301.chronomark.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -31,4 +32,13 @@ val Typography = Typography(
         letterSpacing = 0.5.sp
     )
     */
+)
+
+/**
+ * 等宽数字样式，用于时间显示，确保数字对齐不跳动
+ * 使用 tabular numerals (tnum) 字体特性
+ */
+val TabularNumbersStyle = TextStyle(
+    fontFeatureSettings = "tnum",
+    platformStyle = PlatformTextStyle(includeFontPadding = false)
 )

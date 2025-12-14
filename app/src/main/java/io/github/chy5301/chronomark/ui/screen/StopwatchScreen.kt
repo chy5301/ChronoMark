@@ -22,6 +22,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.chy5301.chronomark.data.DataStoreManager
 import io.github.chy5301.chronomark.data.model.StopwatchStatus
 import io.github.chy5301.chronomark.data.model.TimeRecord
+import io.github.chy5301.chronomark.ui.theme.TabularNumbersStyle
 import io.github.chy5301.chronomark.util.TimeFormatter
 import io.github.chy5301.chronomark.viewmodel.StopwatchViewModel
 import io.github.chy5301.chronomark.viewmodel.StopwatchViewModelFactory
@@ -29,14 +30,11 @@ import io.github.chy5301.chronomark.viewmodel.StopwatchViewModelFactory
 /**
  * 秒表主屏幕
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StopwatchScreen() {
-    val context = LocalContext.current
-    val dataStoreManager = remember { DataStoreManager(context) }
-    val viewModel: StopwatchViewModel = viewModel(
-        factory = StopwatchViewModelFactory(dataStoreManager)
-    )
+fun StopwatchScreen(
+    viewModel: StopwatchViewModel,
+    paddingValues: PaddingValues
+) {
     val uiState by viewModel.uiState.collectAsState()
     var selectedRecord by remember { mutableStateOf<TimeRecord?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -82,41 +80,11 @@ fun StopwatchScreen() {
         )
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("秒表") },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            if (uiState.records.isEmpty()) {
-                                android.widget.Toast.makeText(context, "暂无记录", android.widget.Toast.LENGTH_SHORT).show()
-                            } else {
-                                val shareText = viewModel.generateShareText()
-                                val sendIntent = android.content.Intent().apply {
-                                    action = android.content.Intent.ACTION_SEND
-                                    putExtra(android.content.Intent.EXTRA_TEXT, shareText)
-                                    type = "text/plain"
-                                }
-                                val shareIntent = android.content.Intent.createChooser(sendIntent, "分享记录")
-                                context.startActivity(shareIntent)
-                            }
-                        }
-                    ) {
-                        Icon(Icons.Default.Share, contentDescription = "分享")
-                    }
-                    IconButton(onClick = { /* TODO: 菜单功能 */ }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "菜单")
-                    }
-                }
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = paddingValues.calculateTopPadding())
-        ) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)
+    ) {
             // 时间显示区
             TimeDisplaySection(
                 elapsedTime = uiState.currentTime,
@@ -148,7 +116,6 @@ fun StopwatchScreen() {
                     .fillMaxWidth()
                     .height(96.dp)
             )
-        }
     }
 }
 
@@ -169,6 +136,7 @@ fun TimeDisplaySection(
         // 主计时器
         Text(
             text = elapsedTime,
+            style = TabularNumbersStyle,
             fontSize = 64.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
@@ -179,6 +147,7 @@ fun TimeDisplaySection(
         // 墙上时钟（带日期，不含毫秒）
         Text(
             text = wallClockTime,
+            style = TabularNumbersStyle,
             fontSize = 24.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -257,11 +226,13 @@ fun RecordCard(
             ) {
                 Text(
                     text = "%02d".format(record.index),
+                    style = TabularNumbersStyle,
                     fontSize = 16.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     text = TimeFormatter.formatElapsed(record.elapsedTimeNanos),
+                    style = TabularNumbersStyle,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -278,11 +249,13 @@ fun RecordCard(
             ) {
                 Text(
                     text = TimeFormatter.formatSplit(record.splitTimeNanos),
+                    style = TabularNumbersStyle,
                     fontSize = 20.sp,
                     color = MaterialTheme.colorScheme.tertiary
                 )
                 Text(
                     text = TimeFormatter.formatWallClock(record.wallClockTime),
+                    style = TabularNumbersStyle,
                     fontSize = 18.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

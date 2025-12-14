@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.chy5301.chronomark.data.DataStoreManager
 import io.github.chy5301.chronomark.data.model.TimeRecord
+import io.github.chy5301.chronomark.ui.theme.TabularNumbersStyle
 import io.github.chy5301.chronomark.util.TimeFormatter
 import io.github.chy5301.chronomark.viewmodel.EventViewModel
 import io.github.chy5301.chronomark.viewmodel.EventViewModelFactory
@@ -25,14 +26,11 @@ import io.github.chy5301.chronomark.viewmodel.EventViewModelFactory
 /**
  * 事件模式主屏幕
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EventScreen() {
-    val context = LocalContext.current
-    val dataStoreManager = remember { DataStoreManager(context) }
-    val viewModel: EventViewModel = viewModel(
-        factory = EventViewModelFactory(dataStoreManager)
-    )
+fun EventScreen(
+    viewModel: EventViewModel,
+    paddingValues: PaddingValues
+) {
     val uiState by viewModel.uiState.collectAsState()
     var selectedRecord by remember { mutableStateOf<TimeRecord?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -106,41 +104,11 @@ fun EventScreen() {
         )
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("事件") },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            if (uiState.records.isEmpty()) {
-                                android.widget.Toast.makeText(context, "暂无记录", android.widget.Toast.LENGTH_SHORT).show()
-                            } else {
-                                val shareText = viewModel.generateShareText()
-                                val sendIntent = android.content.Intent().apply {
-                                    action = android.content.Intent.ACTION_SEND
-                                    putExtra(android.content.Intent.EXTRA_TEXT, shareText)
-                                    type = "text/plain"
-                                }
-                                val shareIntent = android.content.Intent.createChooser(sendIntent, "分享记录")
-                                context.startActivity(shareIntent)
-                            }
-                        }
-                    ) {
-                        Icon(Icons.Default.Share, contentDescription = "分享")
-                    }
-                    IconButton(onClick = { /* TODO: 菜单功能 */ }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "菜单")
-                    }
-                }
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = paddingValues.calculateTopPadding())
-        ) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)
+    ) {
             // 时间显示区（仅墙上时钟）
             EventTimeDisplaySection(
                 wallClockTime = uiState.wallClockTime,
@@ -166,7 +134,6 @@ fun EventScreen() {
                     .fillMaxWidth()
                     .height(96.dp)
             )
-        }
     }
 }
 
@@ -198,6 +165,7 @@ fun EventTimeDisplaySection(
         // 时间（56sp，加粗）
         Text(
             text = timePart,
+            style = TabularNumbersStyle,
             fontSize = 56.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
@@ -208,6 +176,7 @@ fun EventTimeDisplaySection(
         // 日期（24sp，次要颜色）
         Text(
             text = datePart,
+            style = TabularNumbersStyle,
             fontSize = 24.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -287,7 +256,7 @@ fun EventRecordCard(
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
-            // 第一行：序号 + 标记时刻（主信息）
+            // 序号 + 标记时刻
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -295,32 +264,20 @@ fun EventRecordCard(
             ) {
                 Text(
                     text = "%02d".format(record.index),
+                    style = TabularNumbersStyle,
                     fontSize = 16.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     text = TimeFormatter.formatWallClock(record.wallClockTime),
+                    style = TabularNumbersStyle,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // 第二行：时间差（次要，右对齐）
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                Text(
-                    text = TimeFormatter.formatSplit(record.splitTimeNanos),
-                    fontSize = 20.sp,
-                    color = MaterialTheme.colorScheme.tertiary
-                )
-            }
-
-            // 第三行：备注（如果有）
+            // 备注（如果有）
             if (record.note.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(

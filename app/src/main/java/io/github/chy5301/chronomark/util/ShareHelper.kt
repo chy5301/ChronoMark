@@ -71,7 +71,6 @@ object ShareHelper {
         records.forEachIndexed { index, record ->
             sb.appendLine("#%02d".format(record.index))
             sb.appendLine("时间: ${TimeFormatter.formatWallClock(record.wallClockTime)}")
-            sb.appendLine("间隔: ${TimeFormatter.formatSplit(record.splitTimeNanos)}")
             if (record.note.isNotBlank()) {
                 sb.appendLine("备注: ${record.note}")
             }
