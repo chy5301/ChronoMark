@@ -33,11 +33,15 @@ import io.github.chy5301.chronomark.viewmodel.StopwatchViewModelFactory
 @Composable
 fun StopwatchScreen(
     viewModel: StopwatchViewModel,
-    paddingValues: PaddingValues
+    paddingValues: PaddingValues,
+    vibrationEnabled: Boolean = true
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var selectedRecord by remember { mutableStateOf<TimeRecord?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    // 创建震动反馈辅助类
+    val hapticFeedback = androidx.compose.ui.platform.LocalHapticFeedback.current
 
     // 编辑对话框
     selectedRecord?.let { record ->
@@ -106,12 +110,42 @@ fun StopwatchScreen(
             // 控制按钮区
             ControlButtonsSection(
                 status = uiState.status,
-                onStartClick = { viewModel.start() },
-                onPauseClick = { viewModel.pause() },
-                onResumeClick = { viewModel.resume() },
-                onStopClick = { viewModel.stop() },
-                onResetClick = { viewModel.reset() },
-                onMarkClick = { viewModel.addMark() },
+                onStartClick = {
+                    if (vibrationEnabled) {
+                        hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    }
+                    viewModel.start()
+                },
+                onPauseClick = {
+                    if (vibrationEnabled) {
+                        hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    }
+                    viewModel.pause()
+                },
+                onResumeClick = {
+                    if (vibrationEnabled) {
+                        hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    }
+                    viewModel.resume()
+                },
+                onStopClick = {
+                    if (vibrationEnabled) {
+                        hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    }
+                    viewModel.stop()
+                },
+                onResetClick = {
+                    if (vibrationEnabled) {
+                        hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    }
+                    viewModel.reset()
+                },
+                onMarkClick = {
+                    if (vibrationEnabled) {
+                        hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    }
+                    viewModel.addMark()
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(96.dp)
@@ -137,7 +171,7 @@ fun TimeDisplaySection(
         Text(
             text = elapsedTime,
             style = TabularNumbersStyle,
-            fontSize = 64.sp,
+            fontSize = 60.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
@@ -187,7 +221,8 @@ fun RecordsListSection(
         LazyColumn(
             modifier = modifier,
             state = listState,
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            // 顶部不留白：避免主时钟区与列表间距显得过大
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 0.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(records) { record ->

@@ -1,6 +1,6 @@
 # ChronoMark 开发待办事项
 
-> 最后更新: 2025-12-13 (Phase 5 数据持久化)
+> 最后更新: 2025-12-14 (Phase 7 优化与完善)
 > 详细的技术要求和设计规范请查看 [CLAUDE.md](./CLAUDE.md)
 
 ## 📊 项目进度总览
@@ -9,9 +9,9 @@
 - [x] Phase 2: 时间点记录
 - [x] Phase 3: 备注编辑
 - [x] Phase 4: 事件模式
-- [x] Phase 5: 数据持久化（已完成，待提交）
-- [ ] Phase 6: 导出功能
-- [ ] Phase 7: 优化与完善
+- [x] Phase 5: 数据持久化
+- [x] Phase 6: 分享与复制功能
+- [ ] Phase 7: 优化与完善（进行中）
 
 ---
 
@@ -77,45 +77,65 @@
 - [x] 创建 ViewModelFactory 支持依赖注入
 - [x] 更新所有 Screen 使用新的 ViewModelFactory
 - [x] 项目构建测试通过
+- [x] 功能测试（应用重启后状态恢复）
 
-**提交**: ⚠️ 待提交
-
-**待办**:
-- [ ] 功能测试（应用重启后状态恢复）
-- [ ] 提交 Phase 5 代码
-- [ ] 打版本标签 v0.5-phase5
+**提交**: ✅ commit 19402ef
 
 ---
 
-## 📤 Phase 6: 导出功能
+## ✅ Phase 6: 分享与复制功能
 
-详细技术要求见 [CLAUDE.md - Phase 6](./CLAUDE.md#phase-6-导出功能)
+详细技术要求见 [CLAUDE.md - Phase 6](./CLAUDE.md#phase-6-分享与复制功能)
 
-- [ ] ExportHelper 工具类
-- [ ] CSV/JSON/TXT 导出逻辑
-- [ ] Android 存储权限（Scoped Storage）
-- [ ] 导出 UI（格式选择对话框）
-- [ ] 文件分享功能（ShareSheet）
-- [ ] 启用两种模式的导出按钮
-- [ ] 测试导出功能
+- [x] 创建 ShareHelper 工具类（生成分享文本）
+- [x] 实现秒表模式文本格式化（每个字段独占一行）
+- [x] 实现事件模式文本格式化（极简设计，仅保留时间和备注）
+- [x] 在 ViewModel 中添加 generateShareText() 方法
+- [x] 在两种模式的 TopAppBar 中启用分享按钮
+- [x] 实现系统分享功能（直接调用 Intent.ACTION_SEND）
+- [x] 添加空记录时的友好提示（Toast）
+- [x] 测试分享功能
 
-**提交**: ⬜ 未开始
+**功能特点**:
+- 简洁的文本格式，易读易分享，每个字段独占一行
+- 日期只在开头显示一次（yyyy-MM-dd），记录中只显示时间
+- 直接调用系统分享面板，系统已包含复制到剪贴板功能
+- 支持分享到任意应用（微信/QQ/便签等）
+
+**提交**: ✅ commit 7929e61
 
 ---
 
-## ✨ Phase 7: 优化与完善
+## 🔄 Phase 7: 优化与完善（进行中）
 
 详细技术要求见 [CLAUDE.md - Phase 7](./CLAUDE.md#phase-7-优化与完善)
 
-- [ ] 性能优化（精度、滚动、协程、重组）
-- [ ] UI/UX 打磨（动画、过渡、深色模式）
-- [ ] 单元测试（工具类、ViewModel、导出）
-- [ ] UI 测试（模式、切换、导出）
-- [ ] 错误处理和边缘情况
-- [ ] 文档完善（README、使用说明、CHANGELOG）
-- [ ] 发布准备（签名、构建、应用商店资源）
+**已完成**:
+- [x] 事件模式列表滚动优化（修复进入界面闪烁问题）
+  - 使用 `initialFirstVisibleItemIndex` 设置列表初始位置
+  - 通过 `previousSize` 精确判断新增/删除/进入界面场景
+  - 只在新增记录时触发自动滚动，删除记录时保持当前位置
 
-**提交**: ⬜ 未开始
+- [x] 设置页面实现（2025-12-14）
+  - 创建 SettingsScreen 页面框架
+  - 实现保持屏幕常亮功能（WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON）
+  - 实现震动反馈功能（HapticFeedback API）
+  - 创建 HapticFeedbackHelper 工具类
+  - 在 DataStoreManager 中添加设置项持久化
+  - 设置页面支持返回键处理（BackHandler）
+  - 所有按钮点击时根据设置提供震动反馈
+  - 菜单按钮改为直接的设置图标（简化导航）
+
+**待完成**:
+- [ ] 性能优化（毫秒精度、列表滚动、协程优化）
+- [ ] UI/UX 打磨（动画、过渡效果、深色模式优化）
+- [ ] 单元测试（工具类、ViewModel、分享逻辑）
+- [ ] UI 测试（两种模式、模式切换、分享功能）
+- [ ] 错误处理和边缘情况（异常捕获、用户友好提示）
+- [ ] 文档完善（README、使用说明、CHANGELOG）
+- [ ] 发布准备（签名密钥、Release 构建、应用商店资源）
+
+**提交**: 🔄 进行中
 
 ---
 

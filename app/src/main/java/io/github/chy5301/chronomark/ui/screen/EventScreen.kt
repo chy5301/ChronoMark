@@ -29,12 +29,16 @@ import io.github.chy5301.chronomark.viewmodel.EventViewModelFactory
 @Composable
 fun EventScreen(
     viewModel: EventViewModel,
-    paddingValues: PaddingValues
+    paddingValues: PaddingValues,
+    vibrationEnabled: Boolean = true
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var selectedRecord by remember { mutableStateOf<TimeRecord?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showResetConfirm by remember { mutableStateOf(false) }
+
+    // 创建震动反馈辅助类
+    val hapticFeedback = androidx.compose.ui.platform.LocalHapticFeedback.current
 
     // 编辑对话框
     selectedRecord?.let { record ->
@@ -128,8 +132,18 @@ fun EventScreen(
 
             // 控制按钮区（始终显示记录和重置）
             EventControlButtonsSection(
-                onRecordClick = { viewModel.recordEvent() },
-                onResetClick = { showResetConfirm = true },
+                onRecordClick = {
+                    if (vibrationEnabled) {
+                        hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    }
+                    viewModel.recordEvent()
+                },
+                onResetClick = {
+                    if (vibrationEnabled) {
+                        hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    }
+                    showResetConfirm = true
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(96.dp)
@@ -162,16 +176,16 @@ fun EventTimeDisplaySection(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // 时间（56sp，加粗）
+        // 时间（60sp，加粗）
         Text(
             text = timePart,
             style = TabularNumbersStyle,
-            fontSize = 56.sp,
+            fontSize = 60.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         // 日期（24sp，次要颜色）
         Text(
@@ -204,28 +218,42 @@ fun EventRecordsListSection(
             )
         }
     } else {
-        val listState = rememberLazyListState()
+        // 创建列表状态，初始位置设置为最后一项，避免"闪一下第一条"的问题
+        val listState = rememberLazyListState(
+            initialFirstVisibleItemIndex = if (records.isNotEmpty()) records.size - 1 else 0
+        )
+        
+        // 记录上一次的列表大小，用于判断是否新增了记录
+        var previousSize by remember { mutableStateOf(records.size) }
 
         // 当记录列表变化时，自动滚动到末尾
         LaunchedEffect(records.size) {
             if (records.isNotEmpty()) {
                 val lastIndex = records.size - 1
-                val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-
-                // 如果已经在底部（最后一个或倒数第二个可见），直接跳转避免抖动
-                if (lastVisibleIndex >= lastIndex - 1) {
-                    listState.scrollToItem(lastIndex)
-                } else {
-                    // 否则使用动画滚动
-                    listState.animateScrollToItem(lastIndex)
+                
+                // 只有当列表大小增加时（新增记录）才执行滚动
+                if (records.size > previousSize) {
+                    val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+                    
+                    // 如果已经在底部（最后一个或倒数第二个可见），直接跳转避免抖动
+                    if (lastVisibleIndex >= lastIndex - 1) {
+                        listState.scrollToItem(lastIndex)
+                    } else {
+                        // 否则使用动画滚动
+                        listState.animateScrollToItem(lastIndex)
+                    }
                 }
+                
+                // 更新记录的大小
+                previousSize = records.size
             }
         }
 
         LazyColumn(
             modifier = modifier,
             state = listState,
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            // 顶部不留白：避免主时钟区与列表间距显得过大
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 0.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(records) { record ->

@@ -3,6 +3,7 @@ package io.github.chy5301.chronomark.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -27,6 +28,8 @@ class DataStoreManager(private val context: Context) {
     companion object {
         // 应用设置
         private val KEY_CURRENT_MODE = stringPreferencesKey("current_mode")
+        private val KEY_KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
+        private val KEY_VIBRATION_ENABLED = booleanPreferencesKey("vibration_enabled")
 
         // 秒表模式数据
         private val KEY_STOPWATCH_STATUS = stringPreferencesKey("stopwatch_status")
@@ -73,6 +76,54 @@ class DataStoreManager(private val context: Context) {
             } catch (e: IllegalArgumentException) {
                 AppMode.EVENT
             }
+        }
+
+    /**
+     * 保存保持屏幕常亮设置
+     */
+    suspend fun saveKeepScreenOn(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_KEEP_SCREEN_ON] = enabled
+        }
+    }
+
+    /**
+     * 读取保持屏幕常亮设置
+     */
+    val keepScreenOnFlow: Flow<Boolean> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(androidx.datastore.preferences.core.emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[KEY_KEEP_SCREEN_ON] ?: false
+        }
+
+    /**
+     * 保存震动反馈设置
+     */
+    suspend fun saveVibrationEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_VIBRATION_ENABLED] = enabled
+        }
+    }
+
+    /**
+     * 读取震动反馈设置
+     */
+    val vibrationEnabledFlow: Flow<Boolean> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(androidx.datastore.preferences.core.emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[KEY_VIBRATION_ENABLED] ?: true
         }
 
     // ==================== 秒表模式数据 ====================

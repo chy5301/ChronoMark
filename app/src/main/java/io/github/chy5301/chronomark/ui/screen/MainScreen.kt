@@ -3,7 +3,7 @@ package io.github.chy5301.chronomark.ui.screen
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Event
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
@@ -40,9 +40,21 @@ fun MainScreen() {
         factory = EventViewModelFactory(dataStoreManager)
     )
 
+    // 设置页面导航状态
+    var showSettings by remember { mutableStateOf(false) }
+
+    // 如果显示设置页面，直接返回设置界面
+    if (showSettings) {
+        SettingsScreen(onBackClick = { showSettings = false })
+        return
+    }
+
     // 根据当前模式获取对应的状态和方法
     val stopwatchUiState by stopwatchViewModel.uiState.collectAsState()
     val eventUiState by eventViewModel.uiState.collectAsState()
+
+    // 读取震动反馈设置
+    val vibrationEnabled by dataStoreManager.vibrationEnabledFlow.collectAsState(initial = true)
 
     Scaffold(
         topBar = {
@@ -83,9 +95,9 @@ fun MainScreen() {
                     ) {
                         Icon(Icons.Default.Share, contentDescription = "分享")
                     }
-                    // 菜单按钮
-                    IconButton(onClick = { /* TODO: 菜单功能 */ }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "菜单")
+                    // 设置按钮
+                    IconButton(onClick = { showSettings = true }) {
+                        Icon(Icons.Default.Settings, contentDescription = "设置")
                     }
                 }
             )
@@ -118,11 +130,13 @@ fun MainScreen() {
         when (currentMode) {
             AppMode.STOPWATCH -> StopwatchScreen(
                 viewModel = stopwatchViewModel,
-                paddingValues = paddingValues
+                paddingValues = paddingValues,
+                vibrationEnabled = vibrationEnabled
             )
             AppMode.EVENT -> EventScreen(
                 viewModel = eventViewModel,
-                paddingValues = paddingValues
+                paddingValues = paddingValues,
+                vibrationEnabled = vibrationEnabled
             )
         }
     }

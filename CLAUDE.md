@@ -8,7 +8,7 @@ ChronoMark 是一个基于 Jetpack Compose 的 Android 秒表应用，采用简�
 
 ## 项目状态
 
-**当前阶段**: Phase 6 分享功能已完成，准备进入 Phase 7 优化与完善
+**当前阶段**: Phase 7 优化与完善进行中
 
 ### 已完成功能
 - ✅ 高精度计时（毫秒级，使用 nanoTime）
@@ -22,6 +22,8 @@ ChronoMark 是一个基于 Jetpack Compose 的 Android 秒表应用，采用简�
 - ✅ 秒表/事件双模式切换（底部导航栏）
 - ✅ 数据持久化（DataStore，应用重启后恢复状态）
 - ✅ 分享与复制功能（系统分享面板，支持分享到任意应用）
+- ✅ 事件模式列表滚动优化（修复进入界面闪烁问题）
+- ✅ 设置页面（保持屏幕常亮、震动反馈）
 
 ## 技术栈
 
@@ -50,14 +52,16 @@ app/src/main/java/io/github/chy5301/chronomark/
 │   ├── screen/
 │   │   ├── MainScreen.kt        # 主屏幕（管理双模式切换）
 │   │   ├── StopwatchScreen.kt   # 秒表主屏幕及所有 UI 组件
-│   │   └── EventScreen.kt       # 事件主屏幕及所有 UI 组件
+│   │   ├── EventScreen.kt       # 事件主屏幕及所有 UI 组件
+│   │   └── SettingsScreen.kt    # 设置页面
 │   └── theme/                   # Compose 主题配置
 │       ├── Color.kt
 │       ├── Theme.kt
 │       └── Type.kt
 ├── util/
 │   ├── TimeFormatter.kt         # 时间格式化工具类
-│   └── ShareHelper.kt           # 分享文本生成工具类
+│   ├── ShareHelper.kt           # 分享文本生成工具类
+│   └── HapticFeedbackHelper.kt  # 震动反馈辅助工具类
 └── viewmodel/
     ├── StopwatchViewModel.kt    # 秒表业务逻辑和状态管理
     ├── StopwatchViewModelFactory.kt  # 秒表 ViewModel 工厂
@@ -155,13 +159,14 @@ app/src/main/java/io/github/chy5301/chronomark/
 
 #### 秒表模式 - 时间显示区
 ```
-           00:14.235                ← 主计时器（64sp，加粗）
+           00:14.235                ← 主计时器（60sp，加粗）
       2025-11-10 13:47:37           ← 墙上时钟（24sp，次要颜色，带日期）
 ```
 
 #### 事件模式 - 时间显示区
 ```
-      2025-11-10 13:47:37           ← 墙上时钟（48sp，加粗，带日期）
+         13:47:37                   ← 墙上时钟（60sp，加粗）
+      2025-11-10                    ← 日期（24sp，次要颜色）
 ```
 
 #### 秒表模式 - 记录卡片布局
@@ -287,7 +292,7 @@ formatShareDate(timestampMillis) -> "2025-11-10"
 ### 视觉设计规范
 
 #### 字体大小
-- 主计时器: 64sp（加粗）
+- 主计时器/主时钟: 60sp（加粗）
 - 墙上时钟（主界面）: 24sp（常规）
 - 记录累计时间: 28sp（加粗）
 - 记录序号: 16sp（常规）
@@ -345,23 +350,43 @@ LaunchedEffect(records.size) {
 }
 ```
 
-**事件模式**: 正序排列，新记录在末尾，需避免抖动
+**事件模式**: 正序排列，新记录在末尾，需避免首次加载闪烁和抖动
 ```kotlin
+// 创建列表状态时设置初始位置，避免进入界面时"闪一下第一条"的问题
+val listState = rememberLazyListState(
+    initialFirstVisibleItemIndex = if (records.isNotEmpty()) records.size - 1 else 0
+)
+
+// 记录上一次的列表大小，用于判断是否新增了记录
+var previousSize by remember { mutableStateOf(records.size) }
+
 LaunchedEffect(records.size) {
     if (records.isNotEmpty()) {
         val lastIndex = records.size - 1
-        val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-
-        // 已在底部 → 直接跳转（无动画，避免抖动）
-        if (lastVisibleIndex >= lastIndex - 1) {
-            listState.scrollToItem(lastIndex)
-        } else {
-            // 不在底部 → 使用动画滚动
-            listState.animateScrollToItem(lastIndex)
+        
+        // 只有当列表大小增加时（新增记录）才执行滚动
+        if (records.size > previousSize) {
+            val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            
+            // 已在底部 → 直接跳转（无动画，避免抖动）
+            if (lastVisibleIndex >= lastIndex - 1) {
+                listState.scrollToItem(lastIndex)
+            } else {
+                // 不在底部 → 使用动画滚动
+                listState.animateScrollToItem(lastIndex)
+            }
         }
+        
+        // 更新记录的大小
+        previousSize = records.size
     }
 }
 ```
+
+**关键优化点**：
+- 使用 `initialFirstVisibleItemIndex` 设置初始位置，进入界面时直接在底部，避免"从第一条闪到最后一条"
+- 通过 `previousSize` 精确判断是新增记录还是进入界面/删除记录，只在新增时滚动
+- 删除记录时（列表大小减少）不触发滚动，保持当前位置
 
 ### 实施路线图
 
@@ -388,7 +413,7 @@ LaunchedEffect(records.size) {
 14. ✅ 创建 AppMode 枚举和 EventUiState 数据模型
 15. ✅ 创建 EventViewModel 管理事件模式状态
 16. ✅ 实现 MainScreen 管理模式切换
-17. ✅ 实现事件模式时间显示区（墙上时钟 + 日期，56sp 加粗）
+17. ✅ 实现事件模式时间显示区（墙上时钟 + 日期，60sp 加粗）
 18. ✅ 实现事件模式记录卡片（标记时刻 + 时间差，正序排列）
 19. ✅ 实现事件模式控制按钮（记录 + 重置）
 20. ✅ 实现自动滚动到列表末尾
@@ -485,17 +510,33 @@ ChronoMark 事件记录
 - 每个字段独占一行，格式清晰易读
 - 空记录时显示 Toast 提示"暂无记录"
 
-#### Phase 7: 优化与完善
+#### Phase 7: 优化与完善 🔄 进行中
 **目标**: 性能优化、UI/UX 打磨、测试覆盖，确保应用稳定性和用户体验。
 
-**核心任务**:
-37. 性能优化（毫秒精度、列表滚动、协程优化）
-38. UI/UX 打磨（动画、过渡效果、深色模式优化）
-39. 单元测试（工具类、ViewModel、导出逻辑）
-40. UI 测试（两种模式、模式切换、导出功能）
-41. 错误处理和边缘情况（异常捕获、用户友好提示）
-42. 文档完善（README、使用说明、CHANGELOG）
-43. 发布准备（签名密钥、Release 构建、应用商店资源）
+**已完成的优化**:
+- ✅ **事件模式列表滚动优化**（2025-12-14）
+  - 使用 `initialFirstVisibleItemIndex` 设置列表初始位置
+  - 通过 `previousSize` 精确判断新增/删除/进入界面场景
+  - 修复进入界面时"从第一条闪到最后一条"的视觉问题
+  - 只在新增记录时触发自动滚动，删除记录时保持当前位置
+
+- ✅ **设置页面实现**（2025-12-14）
+  - 创建 SettingsScreen 页面框架
+  - 实现保持屏幕常亮功能（通过 WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON）
+  - 实现震动反馈功能（使用 HapticFeedback API）
+  - 创建 HapticFeedbackHelper 工具类
+  - 在 DataStoreManager 中添加设置项持久化
+  - 设置页面支持返回键处理（BackHandler）
+  - 所有按钮点击时根据设置提供震动反馈
+
+**待完成任务**:
+38. 性能优化（毫秒精度、列表滚动、协程优化）
+39. UI/UX 打磨（动画、过渡效果、深色模式优化）
+40. 单元测试（工具类、ViewModel、分享逻辑）
+41. UI 测试（两种模式、模式切换、分享功能）
+42. 错误处理和边缘情况（异常捕获、用户友好提示）
+43. 文档完善（README、使用说明、CHANGELOG）
+44. 发布准备（签名密钥、Release 构建、应用商店资源）
 
 **技术要点**:
 - 使用 `remember` 和 `derivedStateOf` 减少重组
