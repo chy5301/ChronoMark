@@ -67,11 +67,11 @@ class DataStoreManager(private val context: Context) {
             }
         }
         .map { preferences ->
-            val modeName = preferences[KEY_CURRENT_MODE] ?: AppMode.STOPWATCH.name
+            val modeName = preferences[KEY_CURRENT_MODE] ?: AppMode.EVENT.name
             try {
                 AppMode.valueOf(modeName)
             } catch (e: IllegalArgumentException) {
-                AppMode.STOPWATCH
+                AppMode.EVENT
             }
         }
 

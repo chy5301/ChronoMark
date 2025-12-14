@@ -4,11 +4,11 @@
 
 ## 项目概述
 
-ChronoMark 是一个基于 Jetpack Compose 的 Android 秒表应用，采用简洁的传统秒表设计，支持高精度计时（毫秒级）、时间点标记、备注添加、实时墙上时钟显示以及多格式数据导出功能。
+ChronoMark 是一个基于 Jetpack Compose 的 Android 秒表应用，采用简洁的传统秒表设计，支持高精度计时（毫秒级）、时间点标记、备注添加、实时墙上时钟显示、数据持久化以及便捷的分享功能。
 
 ## 项目状态
 
-**当前阶段**: Phase 5 数据持久化已完成，准备开发导出功能
+**当前阶段**: Phase 6 分享功能已完成，准备进入 Phase 7 优化与完善
 
 ### 已完成功能
 - ✅ 高精度计时（毫秒级，使用 nanoTime）
@@ -21,6 +21,7 @@ ChronoMark 是一个基于 Jetpack Compose 的 Android 秒表应用，采用简�
 - ✅ 事件模式（简化的时间点记录）
 - ✅ 秒表/事件双模式切换（底部导航栏）
 - ✅ 数据持久化（DataStore，应用重启后恢复状态）
+- ✅ 分享与复制功能（系统分享面板，支持分享到任意应用）
 
 ## 技术栈
 
@@ -38,21 +39,30 @@ ChronoMark 是一个基于 Jetpack Compose 的 Android 秒表应用，采用简�
 app/src/main/java/io/github/chy5301/chronomark/
 ├── MainActivity.kt              # 主入口 Activity
 ├── data/
+│   ├── DataStoreManager.kt      # 数据持久化管理器
 │   └── model/
+│       ├── AppMode.kt           # 应用模式枚举（秒表/事件）
 │       ├── TimeRecord.kt        # 时间记录数据模型
 │       ├── StopwatchStatus.kt   # 秒表状态枚举
-│       └── StopwatchUiState.kt  # UI 状态数据类
+│       ├── StopwatchUiState.kt  # 秒表 UI 状态数据类
+│       └── EventUiState.kt      # 事件 UI 状态数据类
 ├── ui/
 │   ├── screen/
-│   │   └── StopwatchScreen.kt   # 秒表主屏幕及所有 UI 组件
+│   │   ├── MainScreen.kt        # 主屏幕（管理双模式切换）
+│   │   ├── StopwatchScreen.kt   # 秒表主屏幕及所有 UI 组件
+│   │   └── EventScreen.kt       # 事件主屏幕及所有 UI 组件
 │   └── theme/                   # Compose 主题配置
 │       ├── Color.kt
 │       ├── Theme.kt
 │       └── Type.kt
 ├── util/
-│   └── TimeFormatter.kt         # 时间格式化工具类
+│   ├── TimeFormatter.kt         # 时间格式化工具类
+│   └── ShareHelper.kt           # 分享文本生成工具类
 └── viewmodel/
-    └── StopwatchViewModel.kt    # 秒表业务逻辑和状态管理
+    ├── StopwatchViewModel.kt    # 秒表业务逻辑和状态管理
+    ├── StopwatchViewModelFactory.kt  # 秒表 ViewModel 工厂
+    ├── EventViewModel.kt        # 事件业务逻辑和状态管理
+    └── EventViewModelFactory.kt # 事件 ViewModel 工厂
 ```
 
 ## 常用命令
@@ -271,51 +281,8 @@ formatWallClock(timestampMillis) -> "13:47:30.474"
 // 墙上时钟格式（主界面显示）: yyyy-MM-dd HH:mm:ss (日期+时间，不含毫秒)
 formatWallClockWithDate(timestampMillis) -> "2025-11-10 13:47:37"
 
-// 导出用完整时间: yyyy-MM-dd HH:mm:ss.SSS
-formatFullTimestamp(timestampMillis) -> "2025-11-10 13:47:30.474"
-```
-
-### 导出格式规范
-
-#### CSV 格式
-```csv
-序号,累计时间,时间差,标记时间,备注
-01,00:07.403,+00:07.403,2025-11-10 13:47:30.474,第一圈完成
-02,00:10.553,+00:03.150,2025-11-10 13:47:33.624,第二圈
-```
-
-#### JSON 格式
-```json
-{
-  "session": {
-    "totalTime": "00:12.055",
-    "recordCount": 3,
-    "exportTime": "2025-11-10 13:50:00.000"
-  },
-  "records": [
-    {
-      "index": 1,
-      "elapsedTime": "00:07.403",
-      "splitTime": "+00:07.403",
-      "markTime": "2025-11-10 13:47:30.474",
-      "note": "第一圈完成"
-    }
-  ]
-}
-```
-
-#### TXT 格式
-```
-ChronoMark 秒表记录
-导出时间: 2025-11-10 13:50:00
-总用时: 00:12.055
-记录数: 3
-
-────────────────────────────────────
-
-#01  累计: 00:07.403  差值: +00:07.403
-     时间: 2025-11-10 13:47:30.474
-     备注: 第一圈完成
+// 分享用日期格式: yyyy-MM-dd
+formatShareDate(timestampMillis) -> "2025-11-10"
 ```
 
 ### 视觉设计规范
@@ -442,25 +409,85 @@ LaunchedEffect(records.size) {
 32. ✅ 创建 ViewModelFactory 支持依赖注入
 33. ✅ 更新所有 Screen 使用新的 ViewModelFactory
 
-#### Phase 6: 导出功能
-**目标**: 实现将记录导出为 CSV/JSON/TXT 格式，支持分享到其他应用。
+#### Phase 6: 分享与复制功能 ✅ 已完成
+**目标**: 像便签应用一样，支持将记录分享到其他应用或复制到剪贴板。
 
-**技术选型**: MediaStore API (Android 10+ Scoped Storage)
+**设计理念**:
+- 简洁的文本格式，易读易分享，每个字段独占一行
+- 日期只在开头显示一次（yyyy-MM-dd），记录中只显示时间（HH:mm:ss.SSS）
+- 直接调用系统分享面板，系统已包含复制到剪贴板功能
+
+**文本格式示例**（秒表模式）:
+```
+ChronoMark 秒表记录
+记录时间: 2025-11-10
+总用时: 00:12.055
+记录数: 3
+────────────────────────────────────
+#01
+累计: 00:07.403
+差值: +00:07.403
+时间: 13:47:30.474
+备注: 第一圈完成
+
+#02
+累计: 00:10.553
+差值: +00:03.150
+时间: 13:47:33.624
+
+#03
+累计: 00:12.055
+差值: +00:01.502
+时间: 13:47:35.126
+备注: 冲刺阶段
+```
+
+**文本格式示例**（事件模式）:
+```
+ChronoMark 事件记录
+记录时间: 2025-11-10
+记录数: 3
+────────────────────────────────────
+#01
+时间: 13:47:30.474
+间隔: +00:07.403
+备注: 第一次观察
+
+#02
+时间: 13:47:33.624
+间隔: +00:03.150
+
+#03
+时间: 13:47:35.126
+间隔: +00:01.502
+备注: 记录结束
+```
 
 **核心任务**:
-29. 创建 ExportHelper 工具类
-30. 实现 CSV 格式导出（包含完整时间戳）
-31. 实现 JSON 格式导出（包含会话元数据）
-32. 实现 TXT 格式导出（易读格式）
-33. 处理 Android 存储权限（Scoped Storage）
-34. 实现导出 UI（格式选择对话框）
-35. 实现文件分享功能（ShareSheet）
-36. 在两种模式的 TopAppBar 中启用导出按钮
+29. ✅ 创建 ShareHelper 工具类（生成分享文本）
+30. ✅ 实现秒表模式文本格式化（每个字段独占一行）
+31. ✅ 实现事件模式文本格式化（每个字段独占一行）
+32. ✅ 在 ViewModel 中添加 generateShareText() 方法
+33. ✅ 在两种模式的 TopAppBar 中启用分享按钮
+34. ✅ 实现系统分享功能（直接调用 Intent.ACTION_SEND）
+35. ✅ 添加空记录时的友好提示（Toast）
+
+**UI 交互设计**:
+```
+点击 TopAppBar 分享按钮
+    ↓
+直接打开系统分享面板
+    ↓
+用户选择目标应用（微信/QQ/便签等）或复制到剪贴板
+```
 
 **技术要点**:
-- 使用 MediaStore.Downloads 保存文件
-- 文件名格式: `ChronoMark_[模式]_[日期时间].csv`
-- 导出包含完整日期时间（yyyy-MM-dd HH:mm:ss.SSS）
+- 使用 `Intent.ACTION_SEND` + `Intent.EXTRA_TEXT` 调用系统分享面板
+- 系统分享面板自带"复制到剪贴板"选项，无需单独实现
+- 日期只在文本开头显示一次（yyyy-MM-dd）
+- 记录中时间格式为 HH:mm:ss.SSS（不含日期）
+- 每个字段独占一行，格式清晰易读
+- 空记录时显示 Toast 提示"暂无记录"
 
 #### Phase 7: 优化与完善
 **目标**: 性能优化、UI/UX 打磨、测试覆盖，确保应用稳定性和用户体验。

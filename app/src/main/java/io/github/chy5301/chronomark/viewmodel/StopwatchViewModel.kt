@@ -6,6 +6,7 @@ import io.github.chy5301.chronomark.data.DataStoreManager
 import io.github.chy5301.chronomark.data.model.StopwatchStatus
 import io.github.chy5301.chronomark.data.model.StopwatchUiState
 import io.github.chy5301.chronomark.data.model.TimeRecord
+import io.github.chy5301.chronomark.util.ShareHelper
 import io.github.chy5301.chronomark.util.TimeFormatter
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -296,6 +297,17 @@ class StopwatchViewModel(
                 }
             }
         }
+    }
+
+    /**
+     * 生成分享文本
+     */
+    fun generateShareText(): String {
+        val currentState = _uiState.value
+        return ShareHelper.generateStopwatchShareText(
+            records = currentState.records,
+            totalElapsedNanos = currentState.currentTimeNanos
+        )
     }
 
     /**

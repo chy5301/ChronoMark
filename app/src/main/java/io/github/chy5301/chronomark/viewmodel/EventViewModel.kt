@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.chy5301.chronomark.data.DataStoreManager
 import io.github.chy5301.chronomark.data.model.EventUiState
 import io.github.chy5301.chronomark.data.model.TimeRecord
+import io.github.chy5301.chronomark.util.ShareHelper
 import io.github.chy5301.chronomark.util.TimeFormatter
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -136,6 +137,13 @@ class EventViewModel(
                 it.copy(records = savedRecords)
             }
         }
+    }
+
+    /**
+     * 生成分享文本
+     */
+    fun generateShareText(): String {
+        return ShareHelper.generateEventShareText(_uiState.value.records)
     }
 
     /**

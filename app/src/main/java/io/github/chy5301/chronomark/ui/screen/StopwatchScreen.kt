@@ -87,8 +87,23 @@ fun StopwatchScreen() {
             TopAppBar(
                 title = { Text("秒表") },
                 actions = {
-                    IconButton(onClick = { /* TODO: 导出功能 */ }) {
-                        Icon(Icons.Default.Share, contentDescription = "导出")
+                    IconButton(
+                        onClick = {
+                            if (uiState.records.isEmpty()) {
+                                android.widget.Toast.makeText(context, "暂无记录", android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                val shareText = viewModel.generateShareText()
+                                val sendIntent = android.content.Intent().apply {
+                                    action = android.content.Intent.ACTION_SEND
+                                    putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                                    type = "text/plain"
+                                }
+                                val shareIntent = android.content.Intent.createChooser(sendIntent, "分享记录")
+                                context.startActivity(shareIntent)
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = "分享")
                     }
                     IconButton(onClick = { /* TODO: 菜单功能 */ }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "菜单")
