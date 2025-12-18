@@ -5,6 +5,7 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import io.github.chy5301.chronomark.data.DataStoreManager
@@ -24,10 +25,17 @@ class MainActivity : ComponentActivity() {
                 val keepScreenOn by dataStoreManager.keepScreenOnFlow.collectAsState(initial = false)
 
                 // 根据设置更新窗口标志
-                if (keepScreenOn) {
-                    window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                } else {
-                    window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                DisposableEffect(keepScreenOn) {
+                    if (keepScreenOn) {
+                        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    } else {
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    }
+
+                    onDispose {
+                        // 清理：组件销毁时移除标志
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    }
                 }
 
                 MainScreen()
