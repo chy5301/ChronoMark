@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import io.github.chy5301.chronomark.data.model.AppMode
 import io.github.chy5301.chronomark.data.model.StopwatchStatus
+import io.github.chy5301.chronomark.data.model.ThemeMode
 import io.github.chy5301.chronomark.data.model.TimeRecord
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -30,6 +31,7 @@ class DataStoreManager(private val context: Context) {
         private val KEY_CURRENT_MODE = stringPreferencesKey("current_mode")
         private val KEY_KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
         private val KEY_VIBRATION_ENABLED = booleanPreferencesKey("vibration_enabled")
+        private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
 
         // 秒表模式数据
         private val KEY_STOPWATCH_STATUS = stringPreferencesKey("stopwatch_status")
@@ -124,6 +126,35 @@ class DataStoreManager(private val context: Context) {
         }
         .map { preferences ->
             preferences[KEY_VIBRATION_ENABLED] ?: true
+        }
+
+    /**
+     * 保存主题模式
+     */
+    suspend fun saveThemeMode(mode: ThemeMode) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_THEME_MODE] = mode.name
+        }
+    }
+
+    /**
+     * 读取主题模式
+     */
+    val themeModeFlow: Flow<ThemeMode> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(androidx.datastore.preferences.core.emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            val modeName = preferences[KEY_THEME_MODE] ?: ThemeMode.SYSTEM.name
+            try {
+                ThemeMode.valueOf(modeName)
+            } catch (_: IllegalArgumentException) {
+                ThemeMode.SYSTEM
+            }
         }
 
     // ==================== 秒表模式数据 ====================

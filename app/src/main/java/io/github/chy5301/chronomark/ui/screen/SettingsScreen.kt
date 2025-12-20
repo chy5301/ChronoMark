@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.github.chy5301.chronomark.data.DataStoreManager
+import io.github.chy5301.chronomark.data.model.ThemeMode
 import kotlinx.coroutines.launch
 import android.content.pm.PackageManager
 
@@ -33,6 +34,10 @@ fun SettingsScreen(
     // 从 DataStore 读取设置
     val keepScreenOn by dataStoreManager.keepScreenOnFlow.collectAsState(initial = false)
     val vibrationEnabled by dataStoreManager.vibrationEnabledFlow.collectAsState(initial = true)
+    val themeMode by dataStoreManager.themeModeFlow.collectAsState(initial = ThemeMode.SYSTEM)
+
+    // 主题选择对话框状态
+    var showThemeDialog by remember { mutableStateOf(false) }
 
     // 获取应用版本号
     val versionName = remember {
@@ -101,8 +106,8 @@ fun SettingsScreen(
                 // 主题设置
                 SettingsNavigationItem(
                     title = "主题",
-                    description = "跟随系统",
-                    onClick = { /* TODO: 打开主题选择对话框 */ }
+                    description = themeMode.getDisplayName(),
+                    onClick = { showThemeDialog = true }
                 )
             }
 
@@ -115,6 +120,20 @@ fun SettingsScreen(
                 )
             }
         }
+    }
+
+    // 主题选择对话框
+    if (showThemeDialog) {
+        ThemeSelectionDialog(
+            currentTheme = themeMode,
+            onDismiss = { showThemeDialog = false },
+            onThemeSelected = { selectedTheme ->
+                coroutineScope.launch {
+                    dataStoreManager.saveThemeMode(selectedTheme)
+                }
+                showThemeDialog = false
+            }
+        )
     }
 }
 
@@ -250,4 +269,49 @@ fun SettingsInfoItem(
             )
         }
     }
+}
+
+/**
+ * 主题选择对话框
+ */
+@Composable
+fun ThemeSelectionDialog(
+    currentTheme: ThemeMode,
+    onDismiss: () -> Unit,
+    onThemeSelected: (ThemeMode) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(text = "选择主题")
+        },
+        text = {
+            Column {
+                ThemeMode.entries.forEach { theme ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onThemeSelected(theme) }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = theme == currentTheme,
+                            onClick = { onThemeSelected(theme) }
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = theme.getDisplayName(),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
 }
