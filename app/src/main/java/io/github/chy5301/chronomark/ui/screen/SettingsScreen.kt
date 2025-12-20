@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.github.chy5301.chronomark.data.DataStoreManager
 import kotlinx.coroutines.launch
+import android.content.pm.PackageManager
 
 /**
  * 设置页面
@@ -32,6 +33,15 @@ fun SettingsScreen(
     // 从 DataStore 读取设置
     val keepScreenOn by dataStoreManager.keepScreenOnFlow.collectAsState(initial = false)
     val vibrationEnabled by dataStoreManager.vibrationEnabledFlow.collectAsState(initial = true)
+
+    // 获取应用版本号
+    val versionName = remember {
+        try {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        } catch (e: PackageManager.NameNotFoundException) {
+            "未知版本"
+        }
+    }
 
     // 拦截返回键，返回主界面而不是关闭应用
     BackHandler(onBack = onBackClick)
@@ -99,10 +109,9 @@ fun SettingsScreen(
             // 关于设置分组
             SettingsGroup(title = "关于") {
                 // 版本信息
-                SettingsNavigationItem(
-                    title = "关于 ChronoMark",
-                    description = "版本 0.6.0",
-                    onClick = { /* TODO: 打开关于对话框 */ }
+                SettingsInfoItem(
+                    title = "版本",
+                    description = versionName
                 )
             }
         }
@@ -209,5 +218,36 @@ fun SettingsNavigationItem(
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+/**
+ * 信息展示设置项（不可点击）
+ */
+@Composable
+fun SettingsInfoItem(
+    title: String,
+    description: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }

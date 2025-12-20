@@ -243,7 +243,7 @@ class StopwatchViewModel(
         viewModelScope.launch {
             // 加载状态
             val savedStatus = dataStoreManager.stopwatchStatusFlow.first()
-            val savedTime = dataStoreManager.stopwatchTimeFlow.first()
+            val savedElapsedNanos = dataStoreManager.stopwatchElapsedTimeFlow.first()
             val savedRecords = dataStoreManager.stopwatchRecordsFlow.first()
 
             // 处理不同状态的恢复
@@ -252,9 +252,6 @@ class StopwatchViewModel(
                     // 保持默认状态
                 }
                 is StopwatchStatus.Running, is StopwatchStatus.Paused, is StopwatchStatus.Stopped -> {
-                    // 从保存的数据中恢复经过的时间
-                    val savedElapsedNanos = savedTime.pauseTimestamp
-
                     // 数据验证：检测异常数据（负数或过大的值）
                     // 如果数据异常，直接清除并重置为初始状态
                     val maxReasonableNanos = 365L * 24 * 60 * 60 * 1_000_000_000L // 1 年
@@ -318,17 +315,12 @@ class StopwatchViewModel(
             // 保存记录
             dataStoreManager.saveStopwatchRecords(currentState.records)
 
-            // 保存经过的时间（不保存 System.nanoTime() 的绝对值）
-            // pauseTimestamp 字段用于存储经过的时间（纳秒）
+            // 保存经过的时间（纳秒）
             val elapsedNanos = when (currentState.status) {
                 is StopwatchStatus.Idle -> 0L
                 else -> currentState.currentTimeNanos
             }
-            dataStoreManager.saveStopwatchTime(
-                startTimeNanos = 0L,  // 不再使用
-                pausedTimeNanos = 0L,  // 不再使用
-                pauseTimestamp = elapsedNanos  // 保存经过的时间
-            )
+            dataStoreManager.saveStopwatchElapsedTime(elapsedNanos)
         }
     }
 

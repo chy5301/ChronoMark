@@ -163,30 +163,18 @@ class DataStoreManager(private val context: Context) {
         }
 
     /**
-     * 保存秒表时间数据
+     * 保存秒表经过的时间（纳秒）
      */
-    suspend fun saveStopwatchTime(
-        startTimeNanos: Long,
-        pausedTimeNanos: Long,
-        pauseTimestamp: Long = 0L
-    ) {
+    suspend fun saveStopwatchElapsedTime(elapsedNanos: Long) {
         context.dataStore.edit { preferences ->
-            preferences[KEY_STOPWATCH_START_TIME] = startTimeNanos
-            preferences[KEY_STOPWATCH_PAUSED_TIME] = pausedTimeNanos
-            preferences[KEY_STOPWATCH_PAUSE_TIMESTAMP] = pauseTimestamp
+            preferences[KEY_STOPWATCH_PAUSE_TIMESTAMP] = elapsedNanos
         }
     }
 
     /**
-     * 读取秒表时间数据
+     * 读取秒表经过的时间（纳秒）
      */
-    data class StopwatchTimeData(
-        val startTimeNanos: Long = 0L,
-        val pausedTimeNanos: Long = 0L,
-        val pauseTimestamp: Long = 0L
-    )
-
-    val stopwatchTimeFlow: Flow<StopwatchTimeData> = context.dataStore.data
+    val stopwatchElapsedTimeFlow: Flow<Long> = context.dataStore.data
         .catch { exception ->
             if (exception is IOException) {
                 emit(androidx.datastore.preferences.core.emptyPreferences())
@@ -195,11 +183,7 @@ class DataStoreManager(private val context: Context) {
             }
         }
         .map { preferences ->
-            StopwatchTimeData(
-                startTimeNanos = preferences[KEY_STOPWATCH_START_TIME] ?: 0L,
-                pausedTimeNanos = preferences[KEY_STOPWATCH_PAUSED_TIME] ?: 0L,
-                pauseTimestamp = preferences[KEY_STOPWATCH_PAUSE_TIMESTAMP] ?: 0L
-            )
+            preferences[KEY_STOPWATCH_PAUSE_TIMESTAMP] ?: 0L
         }
 
     /**
@@ -280,10 +264,11 @@ class DataStoreManager(private val context: Context) {
     suspend fun clearStopwatchData() {
         context.dataStore.edit { preferences ->
             preferences.remove(KEY_STOPWATCH_STATUS)
+            preferences.remove(KEY_STOPWATCH_PAUSE_TIMESTAMP)  // 当前使用：存储经过的时间
+            preferences.remove(KEY_STOPWATCH_RECORDS)
+            // 清除已废弃的 key（兼容旧版本数据）
             preferences.remove(KEY_STOPWATCH_START_TIME)
             preferences.remove(KEY_STOPWATCH_PAUSED_TIME)
-            preferences.remove(KEY_STOPWATCH_PAUSE_TIMESTAMP)
-            preferences.remove(KEY_STOPWATCH_RECORDS)
         }
     }
 
