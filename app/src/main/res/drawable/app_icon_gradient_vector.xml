@@ -11,6 +11,9 @@
     <!-- 圆点颜色: #4D3970 -->
     <!-- 指针颜色: #4393E1 -->
 
+    <!-- 整体向右平移 48 单位，使下方圆点居中 -->
+    <group android:translateX="48">
+
     <!-- 圆点1 -->
     <path
         android:fillColor="#253C71"
@@ -178,5 +181,7 @@
             </gradient>
         </aapt:attr>
     </path>
+
+    </group>
 
 </vector>
