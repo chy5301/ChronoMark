@@ -1,27 +1,46 @@
 package io.github.chy5301.chronomark.ui.screen
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import io.github.chy5301.chronomark.data.DataStoreManager
 import io.github.chy5301.chronomark.data.model.TimeRecord
 import io.github.chy5301.chronomark.ui.theme.TabularNumbersStyle
 import io.github.chy5301.chronomark.util.TimeFormatter
 import io.github.chy5301.chronomark.viewmodel.EventViewModel
-import io.github.chy5301.chronomark.viewmodel.EventViewModelFactory
 
 /**
  * 事件模式主屏幕
@@ -113,41 +132,41 @@ fun EventScreen(
             .fillMaxSize()
             .padding(paddingValues)
     ) {
-            // 时间显示区（仅墙上时钟）
-            EventTimeDisplaySection(
-                wallClockTime = uiState.wallClockTime,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(160.dp)
-            )
+        // 时间显示区（仅墙上时钟）
+        EventTimeDisplaySection(
+            wallClockTime = uiState.wallClockTime,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(160.dp)
+        )
 
-            // 记录列表区
-            EventRecordsListSection(
-                records = uiState.records,
-                onRecordClick = { record -> selectedRecord = record },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-            )
+        // 记录列表区
+        EventRecordsListSection(
+            records = uiState.records,
+            onRecordClick = { record -> selectedRecord = record },
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        )
 
-            // 控制按钮区（始终显示记录和重置）
-            EventControlButtonsSection(
-                onRecordClick = {
-                    if (vibrationEnabled) {
-                        hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                    }
-                    viewModel.recordEvent()
-                },
-                onResetClick = {
-                    if (vibrationEnabled) {
-                        hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                    }
-                    showResetConfirm = true
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(96.dp)
-            )
+        // 控制按钮区（始终显示记录和重置）
+        EventControlButtonsSection(
+            onRecordClick = {
+                if (vibrationEnabled) {
+                    hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                }
+                viewModel.recordEvent()
+            },
+            onResetClick = {
+                if (vibrationEnabled) {
+                    hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                }
+                showResetConfirm = true
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(96.dp)
+        )
     }
 }
 
@@ -166,7 +185,7 @@ fun EventTimeDisplaySection(
         "00:00:00"
     }
     val datePart = if (wallClockTime.length >= 10) {
-        wallClockTime.substring(0, 10) // yyyy-MM-dd
+        wallClockTime.take(10) // yyyy-MM-dd
     } else {
         "0000-00-00"
     }
@@ -200,6 +219,7 @@ fun EventTimeDisplaySection(
 /**
  * 事件模式 - 记录列表区组件
  */
+@Suppress("UNUSED_VALUE")
 @Composable
 fun EventRecordsListSection(
     records: List<TimeRecord>,
@@ -220,21 +240,22 @@ fun EventRecordsListSection(
     } else {
         // 创建列表状态，初始位置设置为最后一项，避免"闪一下第一条"的问题
         val listState = rememberLazyListState(
-            initialFirstVisibleItemIndex = if (records.isNotEmpty()) records.size - 1 else 0
+            initialFirstVisibleItemIndex = records.size - 1
         )
-        
+
         // 记录上一次的列表大小，用于判断是否新增了记录
-        var previousSize by remember { mutableStateOf(records.size) }
+        var previousSize by remember { mutableIntStateOf(records.size) }
 
         // 当记录列表变化时，自动滚动到末尾
         LaunchedEffect(records.size) {
             if (records.isNotEmpty()) {
                 val lastIndex = records.size - 1
-                
+
                 // 只有当列表大小增加时（新增记录）才执行滚动
                 if (records.size > previousSize) {
-                    val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-                    
+                    val lastVisibleIndex =
+                        listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+
                     // 如果已经在底部（最后一个或倒数第二个可见），直接跳转避免抖动
                     if (lastVisibleIndex >= lastIndex - 1) {
                         listState.scrollToItem(lastIndex)
@@ -243,7 +264,7 @@ fun EventRecordsListSection(
                         listState.animateScrollToItem(lastIndex)
                     }
                 }
-                
+
                 // 更新记录的大小
                 previousSize = records.size
             }

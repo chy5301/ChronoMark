@@ -38,7 +38,7 @@ fun SettingsScreen(
     val versionName = remember {
         try {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
-        } catch (e: PackageManager.NameNotFoundException) {
+        } catch (_: PackageManager.NameNotFoundException) {
             "未知版本"
         }
     }
@@ -111,7 +111,7 @@ fun SettingsScreen(
                 // 版本信息
                 SettingsInfoItem(
                     title = "版本",
-                    description = versionName
+                    description = versionName ?: "未知版本"
                 )
             }
         }

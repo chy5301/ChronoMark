@@ -43,7 +43,8 @@ class EventViewModel(
      */
     fun recordEvent() {
         val currentWallClockTime = System.currentTimeMillis()
-        val lastTimestamp = _uiState.value.records.lastOrNull()?.wallClockTime ?: currentWallClockTime
+        val lastTimestamp =
+            _uiState.value.records.lastOrNull()?.wallClockTime ?: currentWallClockTime
         val splitNanos = (currentWallClockTime - lastTimestamp) * 1_000_000 // 毫秒转纳秒
 
         val newRecord = TimeRecord(

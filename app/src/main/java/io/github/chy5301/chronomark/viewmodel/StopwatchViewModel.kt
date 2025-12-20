@@ -251,11 +251,12 @@ class StopwatchViewModel(
                 is StopwatchStatus.Idle -> {
                     // 保持默认状态
                 }
+
                 is StopwatchStatus.Running, is StopwatchStatus.Paused, is StopwatchStatus.Stopped -> {
                     // 数据验证：检测异常数据（负数或过大的值）
                     // 如果数据异常，直接清除并重置为初始状态
                     val maxReasonableNanos = 365L * 24 * 60 * 60 * 1_000_000_000L // 1 年
-                    if (savedElapsedNanos < 0 || savedElapsedNanos > maxReasonableNanos) {
+                    if (savedElapsedNanos !in 0..maxReasonableNanos) {
                         // 数据异常，清除并重置
                         reset()
                         return@launch

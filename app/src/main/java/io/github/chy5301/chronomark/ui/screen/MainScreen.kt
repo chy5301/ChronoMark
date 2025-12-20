@@ -1,14 +1,25 @@
 package io.github.chy5301.chronomark.ui.screen
 
-import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.chy5301.chronomark.data.DataStoreManager
@@ -77,7 +88,11 @@ fun MainScreen() {
                             }
 
                             if (records.isEmpty()) {
-                                android.widget.Toast.makeText(context, "暂无记录", android.widget.Toast.LENGTH_SHORT).show()
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "暂无记录",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
                             } else {
                                 val shareText = when (currentMode) {
                                     AppMode.STOPWATCH -> stopwatchViewModel.generateShareText()
@@ -88,7 +103,8 @@ fun MainScreen() {
                                     putExtra(android.content.Intent.EXTRA_TEXT, shareText)
                                     type = "text/plain"
                                 }
-                                val shareIntent = android.content.Intent.createChooser(sendIntent, "分享记录")
+                                val shareIntent =
+                                    android.content.Intent.createChooser(sendIntent, "分享记录")
                                 context.startActivity(shareIntent)
                             }
                         }
@@ -133,6 +149,7 @@ fun MainScreen() {
                 paddingValues = paddingValues,
                 vibrationEnabled = vibrationEnabled
             )
+
             AppMode.EVENT -> EventScreen(
                 viewModel = eventViewModel,
                 paddingValues = paddingValues,

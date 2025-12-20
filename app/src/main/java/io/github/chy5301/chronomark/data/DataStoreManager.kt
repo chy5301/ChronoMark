@@ -73,7 +73,7 @@ class DataStoreManager(private val context: Context) {
             val modeName = preferences[KEY_CURRENT_MODE] ?: AppMode.EVENT.name
             try {
                 AppMode.valueOf(modeName)
-            } catch (e: IllegalArgumentException) {
+            } catch (_: IllegalArgumentException) {
                 AppMode.EVENT
             }
         }
@@ -214,7 +214,7 @@ class DataStoreManager(private val context: Context) {
             } else {
                 try {
                     json.decodeFromString<List<TimeRecord>>(jsonString)
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     emptyList()
                 }
             }
@@ -250,7 +250,7 @@ class DataStoreManager(private val context: Context) {
             } else {
                 try {
                     json.decodeFromString<List<TimeRecord>>(jsonString)
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     emptyList()
                 }
             }
@@ -283,7 +283,9 @@ class DataStoreManager(private val context: Context) {
 
     /**
      * 清除所有数据
+     * 注：此函数保留以备将来使用（如设置页面的"清除所有数据"功能）
      */
+    @Suppress("unused")
     suspend fun clearAllData() {
         context.dataStore.edit { preferences ->
             preferences.clear()

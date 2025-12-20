@@ -1,6 +1,5 @@
 package io.github.chy5301.chronomark.ui.theme
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
