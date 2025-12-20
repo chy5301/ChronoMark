@@ -246,53 +246,48 @@ class StopwatchViewModel(
             val savedTime = dataStoreManager.stopwatchTimeFlow.first()
             val savedRecords = dataStoreManager.stopwatchRecordsFlow.first()
 
-            // 恢复时间变量
-            startTimeNanos = savedTime.startTimeNanos
-            totalPausedTimeNanos = savedTime.pausedTimeNanos
-
             // 处理不同状态的恢复
             when (savedStatus) {
                 is StopwatchStatus.Idle -> {
                     // 保持默认状态
                 }
-                is StopwatchStatus.Running -> {
+                is StopwatchStatus.Running, is StopwatchStatus.Paused, is StopwatchStatus.Stopped -> {
+                    // 从保存的数据中恢复经过的时间
+                    val savedElapsedNanos = savedTime.pauseTimestamp
+
+                    // 数据验证：检测异常数据（负数或过大的值）
+                    // 如果数据异常，直接清除并重置为初始状态
+                    val maxReasonableNanos = 365L * 24 * 60 * 60 * 1_000_000_000L // 1 年
+                    if (savedElapsedNanos < 0 || savedElapsedNanos > maxReasonableNanos) {
+                        // 数据异常，清除并重置
+                        reset()
+                        return@launch
+                    }
+
+                    // 重新初始化时间基准
+                    // getCurrentElapsedTime() = System.nanoTime() - startTimeNanos - totalPausedTimeNanos
+                    // 我们希望恢复后 getCurrentElapsedTime() = savedElapsedNanos
+                    // 所以: savedElapsedNanos = System.nanoTime() - startTimeNanos - totalPausedTimeNanos
+                    // 设 totalPausedTimeNanos = 0，则: startTimeNanos = System.nanoTime() - savedElapsedNanos
+                    val now = System.nanoTime()
+                    startTimeNanos = now - savedElapsedNanos
+                    totalPausedTimeNanos = 0L
+                    pausedTimeNanos = now
+
                     // Running 状态需要特殊处理：
                     // 如果应用被杀死或重启，Running 状态会变为 Paused
-                    // 因为无法准确恢复运行中的计时
+                    val newStatus = if (savedStatus is StopwatchStatus.Running) {
+                        StopwatchStatus.Paused
+                    } else {
+                        savedStatus
+                    }
+
                     _uiState.update {
                         it.copy(
-                            status = StopwatchStatus.Paused,
+                            status = newStatus,
                             records = savedRecords
                         )
                     }
-                    // 计算暂停时的时间
-                    pausedTimeNanos = System.nanoTime()
-                    val elapsedAtPause = savedTime.pauseTimestamp - startTimeNanos - totalPausedTimeNanos
-                    totalPausedTimeNanos = System.nanoTime() - startTimeNanos - elapsedAtPause
-                    updateCurrentTime()
-                }
-                is StopwatchStatus.Paused -> {
-                    _uiState.update {
-                        it.copy(
-                            status = StopwatchStatus.Paused,
-                            records = savedRecords
-                        )
-                    }
-                    pausedTimeNanos = System.nanoTime()
-                    val elapsedAtPause = savedTime.pauseTimestamp - startTimeNanos - totalPausedTimeNanos
-                    totalPausedTimeNanos = System.nanoTime() - startTimeNanos - elapsedAtPause
-                    updateCurrentTime()
-                }
-                is StopwatchStatus.Stopped -> {
-                    _uiState.update {
-                        it.copy(
-                            status = StopwatchStatus.Stopped,
-                            records = savedRecords
-                        )
-                    }
-                    pausedTimeNanos = System.nanoTime()
-                    val elapsedAtPause = savedTime.pauseTimestamp - startTimeNanos - totalPausedTimeNanos
-                    totalPausedTimeNanos = System.nanoTime() - startTimeNanos - elapsedAtPause
                     updateCurrentTime()
                 }
             }
@@ -323,17 +318,16 @@ class StopwatchViewModel(
             // 保存记录
             dataStoreManager.saveStopwatchRecords(currentState.records)
 
-            // 保存时间数据
-            val pauseTimestamp = when (currentState.status) {
-                is StopwatchStatus.Paused, is StopwatchStatus.Stopped -> {
-                    startTimeNanos + totalPausedTimeNanos + currentState.currentTimeNanos
-                }
-                else -> 0L
+            // 保存经过的时间（不保存 System.nanoTime() 的绝对值）
+            // pauseTimestamp 字段用于存储经过的时间（纳秒）
+            val elapsedNanos = when (currentState.status) {
+                is StopwatchStatus.Idle -> 0L
+                else -> currentState.currentTimeNanos
             }
             dataStoreManager.saveStopwatchTime(
-                startTimeNanos = startTimeNanos,
-                pausedTimeNanos = totalPausedTimeNanos,
-                pauseTimestamp = pauseTimestamp
+                startTimeNanos = 0L,  // 不再使用
+                pausedTimeNanos = 0L,  // 不再使用
+                pauseTimestamp = elapsedNanos  // 保存经过的时间
             )
         }
     }
