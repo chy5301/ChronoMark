@@ -53,10 +53,16 @@ class DataStoreManager(private val context: Context) {
 
     /**
      * 保存当前模式
+     * @return Result.success(Unit) 或 Result.failure(exception)
      */
-    suspend fun saveCurrentMode(mode: AppMode) {
-        context.dataStore.edit { preferences ->
-            preferences[KEY_CURRENT_MODE] = mode.name
+    suspend fun saveCurrentMode(mode: AppMode): Result<Unit> {
+        return try {
+            context.dataStore.edit { preferences ->
+                preferences[KEY_CURRENT_MODE] = mode.name
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
@@ -82,10 +88,16 @@ class DataStoreManager(private val context: Context) {
 
     /**
      * 保存保持屏幕常亮设置
+     * @return Result.success(Unit) 或 Result.failure(exception)
      */
-    suspend fun saveKeepScreenOn(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[KEY_KEEP_SCREEN_ON] = enabled
+    suspend fun saveKeepScreenOn(enabled: Boolean): Result<Unit> {
+        return try {
+            context.dataStore.edit { preferences ->
+                preferences[KEY_KEEP_SCREEN_ON] = enabled
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
@@ -106,10 +118,16 @@ class DataStoreManager(private val context: Context) {
 
     /**
      * 保存震动反馈设置
+     * @return Result.success(Unit) 或 Result.failure(exception)
      */
-    suspend fun saveVibrationEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[KEY_VIBRATION_ENABLED] = enabled
+    suspend fun saveVibrationEnabled(enabled: Boolean): Result<Unit> {
+        return try {
+            context.dataStore.edit { preferences ->
+                preferences[KEY_VIBRATION_ENABLED] = enabled
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
@@ -130,10 +148,16 @@ class DataStoreManager(private val context: Context) {
 
     /**
      * 保存主题模式
+     * @return Result.success(Unit) 或 Result.failure(exception)
      */
-    suspend fun saveThemeMode(mode: ThemeMode) {
-        context.dataStore.edit { preferences ->
-            preferences[KEY_THEME_MODE] = mode.name
+    suspend fun saveThemeMode(mode: ThemeMode): Result<Unit> {
+        return try {
+            context.dataStore.edit { preferences ->
+                preferences[KEY_THEME_MODE] = mode.name
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
@@ -161,15 +185,21 @@ class DataStoreManager(private val context: Context) {
 
     /**
      * 保存秒表状态
+     * @return Result.success(Unit) 或 Result.failure(exception)
      */
-    suspend fun saveStopwatchStatus(status: StopwatchStatus) {
-        context.dataStore.edit { preferences ->
-            preferences[KEY_STOPWATCH_STATUS] = when (status) {
-                is StopwatchStatus.Idle -> "Idle"
-                is StopwatchStatus.Running -> "Running"
-                is StopwatchStatus.Paused -> "Paused"
-                is StopwatchStatus.Stopped -> "Stopped"
+    suspend fun saveStopwatchStatus(status: StopwatchStatus): Result<Unit> {
+        return try {
+            context.dataStore.edit { preferences ->
+                preferences[KEY_STOPWATCH_STATUS] = when (status) {
+                    is StopwatchStatus.Idle -> "Idle"
+                    is StopwatchStatus.Running -> "Running"
+                    is StopwatchStatus.Paused -> "Paused"
+                    is StopwatchStatus.Stopped -> "Stopped"
+                }
             }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
@@ -195,10 +225,16 @@ class DataStoreManager(private val context: Context) {
 
     /**
      * 保存秒表经过的时间（纳秒）
+     * @return Result.success(Unit) 或 Result.failure(exception)
      */
-    suspend fun saveStopwatchElapsedTime(elapsedNanos: Long) {
-        context.dataStore.edit { preferences ->
-            preferences[KEY_STOPWATCH_PAUSE_TIMESTAMP] = elapsedNanos
+    suspend fun saveStopwatchElapsedTime(elapsedNanos: Long): Result<Unit> {
+        return try {
+            context.dataStore.edit { preferences ->
+                preferences[KEY_STOPWATCH_PAUSE_TIMESTAMP] = elapsedNanos
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
@@ -219,11 +255,17 @@ class DataStoreManager(private val context: Context) {
 
     /**
      * 保存秒表记录列表
+     * @return Result.success(Unit) 或 Result.failure(exception)
      */
-    suspend fun saveStopwatchRecords(records: List<TimeRecord>) {
-        context.dataStore.edit { preferences ->
-            val jsonString = json.encodeToString(records)
-            preferences[KEY_STOPWATCH_RECORDS] = jsonString
+    suspend fun saveStopwatchRecords(records: List<TimeRecord>): Result<Unit> {
+        return try {
+            context.dataStore.edit { preferences ->
+                val jsonString = json.encodeToString(records)
+                preferences[KEY_STOPWATCH_RECORDS] = jsonString
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
@@ -255,11 +297,17 @@ class DataStoreManager(private val context: Context) {
 
     /**
      * 保存事件记录列表
+     * @return Result.success(Unit) 或 Result.failure(exception)
      */
-    suspend fun saveEventRecords(records: List<TimeRecord>) {
-        context.dataStore.edit { preferences ->
-            val jsonString = json.encodeToString(records)
-            preferences[KEY_EVENT_RECORDS] = jsonString
+    suspend fun saveEventRecords(records: List<TimeRecord>): Result<Unit> {
+        return try {
+            context.dataStore.edit { preferences ->
+                val jsonString = json.encodeToString(records)
+                preferences[KEY_EVENT_RECORDS] = jsonString
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
@@ -291,35 +339,53 @@ class DataStoreManager(private val context: Context) {
 
     /**
      * 清除所有秒表数据
+     * @return Result.success(Unit) 或 Result.failure(exception)
      */
-    suspend fun clearStopwatchData() {
-        context.dataStore.edit { preferences ->
-            preferences.remove(KEY_STOPWATCH_STATUS)
-            preferences.remove(KEY_STOPWATCH_PAUSE_TIMESTAMP)  // 当前使用：存储经过的时间
-            preferences.remove(KEY_STOPWATCH_RECORDS)
-            // 清除已废弃的 key（兼容旧版本数据）
-            preferences.remove(KEY_STOPWATCH_START_TIME)
-            preferences.remove(KEY_STOPWATCH_PAUSED_TIME)
+    suspend fun clearStopwatchData(): Result<Unit> {
+        return try {
+            context.dataStore.edit { preferences ->
+                preferences.remove(KEY_STOPWATCH_STATUS)
+                preferences.remove(KEY_STOPWATCH_PAUSE_TIMESTAMP)  // 当前使用：存储经过的时间
+                preferences.remove(KEY_STOPWATCH_RECORDS)
+                // 清除已废弃的 key（兼容旧版本数据）
+                preferences.remove(KEY_STOPWATCH_START_TIME)
+                preferences.remove(KEY_STOPWATCH_PAUSED_TIME)
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
     /**
      * 清除所有事件数据
+     * @return Result.success(Unit) 或 Result.failure(exception)
      */
-    suspend fun clearEventData() {
-        context.dataStore.edit { preferences ->
-            preferences.remove(KEY_EVENT_RECORDS)
+    suspend fun clearEventData(): Result<Unit> {
+        return try {
+            context.dataStore.edit { preferences ->
+                preferences.remove(KEY_EVENT_RECORDS)
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
     /**
      * 清除所有数据
      * 注：此函数保留以备将来使用（如设置页面的"清除所有数据"功能）
+     * @return Result.success(Unit) 或 Result.failure(exception)
      */
     @Suppress("unused")
-    suspend fun clearAllData() {
-        context.dataStore.edit { preferences ->
-            preferences.clear()
+    suspend fun clearAllData(): Result<Unit> {
+        return try {
+            context.dataStore.edit { preferences ->
+                preferences.clear()
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 }

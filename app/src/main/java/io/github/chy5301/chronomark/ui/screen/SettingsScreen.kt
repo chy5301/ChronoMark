@@ -82,6 +82,7 @@ fun SettingsScreen(
                     onCheckedChange = { enabled ->
                         coroutineScope.launch {
                             dataStoreManager.saveKeepScreenOn(enabled)
+                                .onFailure { e -> e.printStackTrace() }
                         }
                     }
                 )
@@ -96,6 +97,7 @@ fun SettingsScreen(
                     onCheckedChange = { enabled ->
                         coroutineScope.launch {
                             dataStoreManager.saveVibrationEnabled(enabled)
+                                .onFailure { e -> e.printStackTrace() }
                         }
                     }
                 )
@@ -130,6 +132,7 @@ fun SettingsScreen(
             onThemeSelected = { selectedTheme ->
                 coroutineScope.launch {
                     dataStoreManager.saveThemeMode(selectedTheme)
+                        .onFailure { e -> e.printStackTrace() }
                 }
                 showThemeDialog = false
             }

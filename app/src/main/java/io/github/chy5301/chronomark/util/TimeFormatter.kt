@@ -16,6 +16,11 @@ object TimeFormatter {
      * @return 格式化的时间字符串（MM:SS.mmm）
      */
     fun formatElapsed(nanos: Long): String {
+        // 防御性编程：如果是负数，返回 "00:00.000"
+        if (nanos < 0) {
+            return "00:00.000"
+        }
+
         val totalMillis = nanos / 1_000_000
         val minutes = totalMillis / 60000
         val seconds = (totalMillis % 60000) / 1000
@@ -30,6 +35,10 @@ object TimeFormatter {
      * @return 格式化的时间差字符串（+MM:SS.mmm）
      */
     fun formatSplit(nanos: Long): String {
+        // 防御性编程：如果是负数，返回 "+00:00.000"
+        if (nanos < 0) {
+            return "+00:00.000"
+        }
         return "+" + formatElapsed(nanos)
     }
 

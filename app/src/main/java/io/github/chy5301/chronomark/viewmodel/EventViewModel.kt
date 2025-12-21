@@ -45,7 +45,9 @@ class EventViewModel(
         val currentWallClockTime = System.currentTimeMillis()
         val lastTimestamp =
             _uiState.value.records.lastOrNull()?.wallClockTime ?: currentWallClockTime
-        val splitNanos = (currentWallClockTime - lastTimestamp) * 1_000_000 // 毫秒转纳秒
+        // 确保时间差非负，防止系统时间被调整到过去导致的负数
+        val timeDiff = (currentWallClockTime - lastTimestamp).coerceAtLeast(0L)
+        val splitNanos = timeDiff * 1_000_000 // 毫秒转纳秒
 
         val newRecord = TimeRecord(
             index = _uiState.value.records.size + 1,
@@ -74,6 +76,10 @@ class EventViewModel(
         // 清除保存的数据
         viewModelScope.launch {
             dataStoreManager.clearEventData()
+                .onFailure { e ->
+                    // 记录错误，但不影响 UI 状态重置
+                    e.printStackTrace()
+                }
         }
     }
 
@@ -153,6 +159,7 @@ class EventViewModel(
     private fun saveRecords() {
         viewModelScope.launch {
             dataStoreManager.saveEventRecords(_uiState.value.records)
+                .onFailure { e -> e.printStackTrace() }
         }
     }
 

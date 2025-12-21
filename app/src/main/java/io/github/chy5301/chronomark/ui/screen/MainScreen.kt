@@ -127,6 +127,7 @@ fun MainScreen() {
                     onClick = {
                         coroutineScope.launch {
                             dataStoreManager.saveCurrentMode(AppMode.EVENT)
+                                .onFailure { e -> e.printStackTrace() }
                         }
                     }
                 )
@@ -137,6 +138,7 @@ fun MainScreen() {
                     onClick = {
                         coroutineScope.launch {
                             dataStoreManager.saveCurrentMode(AppMode.STOPWATCH)
+                                .onFailure { e -> e.printStackTrace() }
                         }
                     }
                 )

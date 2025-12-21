@@ -146,9 +146,16 @@
   - 设计完整的优化方案（优先级分级）
   - 编写实施计划（Phase 1-3）
 
+- [x] DataStore 错误处理优化（2025-12-21）
+  - 为所有 save*/clear* 方法添加 try-catch 和 Result<Unit> 返回类型
+  - 在 ViewModel 和 Screen 中使用 .onFailure 处理错误
+  - 采用"优雅降级"策略：保存失败不影响 UI，只记录日志
+  - 确保应用在数据持久化失败时不会崩溃
+  - 共计修改 10 个 DataStoreManager 方法和 9 处调用点
+
 **待完成**:
 - [ ] **错误处理和边缘情况优化**（优先级 1）⭐⭐⭐⭐⭐
-  - [ ] DataStore 错误处理（try-catch + Result 返回）
+  - [x] DataStore 错误处理（try-catch + Result 返回）
   - [ ] 记录数量限制（MAX_RECORDS = 1000）
   - [ ] 备注长度限制（MAX_NOTE_LENGTH = 500）
   - [ ] 时间计算边界检查（防止溢出和负数）
@@ -163,9 +170,9 @@
 - [ ] 发布准备（签名密钥、Release 构建、应用商店资源）
 
 **最近提交**:
-- [待提交] - feat: 实现深色模式功能
+- [待提交] - feat: 添加 DataStore 错误处理机制
+- 47016f8 - feat: 实现深色模式功能并完成错误处理分析
 - dd5bf52 - refactor: 修复代码质量警告并优化代码规范
-- 02bbdc4 - refactor: 简化数据持久化 API 并优化设置页面
 
 ---
 

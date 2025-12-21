@@ -116,6 +116,10 @@ class StopwatchViewModel(
         // 清除保存的数据
         viewModelScope.launch {
             dataStoreManager.clearStopwatchData()
+                .onFailure { e ->
+                    // 记录错误，但不影响 UI 状态重置
+                    e.printStackTrace()
+                }
         }
     }
 
@@ -128,7 +132,8 @@ class StopwatchViewModel(
         val currentNanos = getCurrentElapsedTime()
         val currentWallClockTime = System.currentTimeMillis()
         val lastNanos = _uiState.value.records.firstOrNull()?.elapsedTimeNanos ?: 0L
-        val splitNanos = currentNanos - lastNanos
+        // 确保时间差非负，防止数据损坏或异常导致的负数
+        val splitNanos = (currentNanos - lastNanos).coerceAtLeast(0L)
 
         val newRecord = TimeRecord(
             index = _uiState.value.records.size + 1,
@@ -175,9 +180,11 @@ class StopwatchViewModel(
 
     /**
      * 获取当前经过的时间（纳秒）
+     * 确保返回值非负，防止系统时间异常导致的负数
      */
     private fun getCurrentElapsedTime(): Long {
-        return System.nanoTime() - startTimeNanos - totalPausedTimeNanos
+        val elapsed = System.nanoTime() - startTimeNanos - totalPausedTimeNanos
+        return elapsed.coerceAtLeast(0L)
     }
 
     /**
@@ -312,9 +319,11 @@ class StopwatchViewModel(
 
             // 保存状态
             dataStoreManager.saveStopwatchStatus(currentState.status)
+                .onFailure { e -> e.printStackTrace() }
 
             // 保存记录
             dataStoreManager.saveStopwatchRecords(currentState.records)
+                .onFailure { e -> e.printStackTrace() }
 
             // 保存经过的时间（纳秒）
             val elapsedNanos = when (currentState.status) {
@@ -322,6 +331,7 @@ class StopwatchViewModel(
                 else -> currentState.currentTimeNanos
             }
             dataStoreManager.saveStopwatchElapsedTime(elapsedNanos)
+                .onFailure { e -> e.printStackTrace() }
         }
     }
 
