@@ -57,14 +57,22 @@ ChronoMark 是一个基于 Jetpack Compose 的 Android 时间记录应用。**�
 app/src/main/java/io/github/chy5301/chronomark/
 ├── MainActivity.kt              # 主入口 Activity
 ├── data/
-│   ├── DataStoreManager.kt      # 数据持久化管理器
+│   ├── DataStoreManager.kt      # DataStore 管理器（应用设置 + 工作区暂存）
+│   ├── database/                # Room 数据库（历史记录存储）
+│   │   ├── AppDatabase.kt       # 数据库实例（单例）
+│   │   ├── dao/
+│   │   │   └── HistoryDao.kt    # 历史记录 DAO 接口
+│   │   ├── entity/
+│   │   │   ├── HistorySessionEntity.kt  # 会话表实体
+│   │   │   └── TimeRecordEntity.kt      # 记录表实体
+│   │   └── repository/
+│   │       └── HistoryRepository.kt     # 历史数据仓库层
 │   └── model/
 │       ├── AppMode.kt           # 应用模式枚举（秒表/事件）
-│       ├── TimeRecord.kt        # 时间记录数据模型
+│       ├── TimeRecord.kt        # 时间记录数据模型（工作区使用）
 │       ├── StopwatchStatus.kt   # 秒表状态枚举
 │       ├── StopwatchUiState.kt  # 秒表 UI 状态数据类
 │       ├── EventUiState.kt      # 事件 UI 状态数据类
-│       ├── HistorySession.kt    # 历史会话数据模型
 │       ├── HistoryUiState.kt    # 历史 UI 状态数据类
 │       └── SessionType.kt       # 会话类型枚举（事件/秒表）
 ├── ui/
@@ -155,7 +163,7 @@ app/src/main/java/io/github/chy5301/chronomark/
 3. **时间点标记**: 运行中可瞬间标记时间点，不中断计时流程
 4. **双时间显示**: 同时显示累计经过时间和当前墙上时钟时间（精确到毫秒）
 5. **备注功能**: 为每个时间点添加文字说明（后续手动补充）
-6. **数据导出**: 支持导出为 CSV/JSON/TXT 格式，包含完整日期时间信息
+6. **分享功能**: 通过系统分享面板分享记录（格式化文本），支持分享到任意应用或复制到剪贴板
 7. **模式切换**: 底部导航栏切换秒表/事件两种模式，历史记录和设置通过 TopAppBar 按钮访问，数据分开存储
 8. **历史记录**: 事件模式自动按天归档，秒表模式手动保存会话，支持查看、分享、管理历史数据
 
@@ -655,7 +663,8 @@ data class HistoryUiState(
 // 在 DataStoreManager 中添加
 data class AppSettings(
     // ... 现有设置
-    val archiveBoundaryHour: Int = 4,          // 归档分界点（0-23 点）默认凌晨 4 点
+    val archiveBoundaryHour: Int = 4,          // 归档分界点 - 时（0-23）默认凌晨 4 点
+    val archiveBoundaryMinute: Int = 0,        // 归档分界点 - 分（0-59）默认 0 分
     val autoArchiveEnabled: Boolean = true     // 是否启用自动归档
 )
 ```
@@ -909,12 +918,13 @@ data class AppSettings(
 ```kotlin
 // 在 MainActivity 的 onResume 检查
 fun checkAndArchiveIfNeeded() {
-    val currentHour = LocalDateTime.now().hour
-    val boundaryHour = settings.archiveBoundaryHour
+    val now = LocalDateTime.now()
+    val currentTime = now.hour * 60 + now.minute  // 转换为分钟数
+    val boundaryTime = settings.archiveBoundaryHour * 60 + settings.archiveBoundaryMinute
     val lastCheckDate = dataStore.getLastArchiveCheckDate()
     val today = LocalDate.now()
 
-    if (shouldArchive(lastCheckDate, today, currentHour, boundaryHour)) {
+    if (shouldArchive(lastCheckDate, today, currentTime, boundaryTime)) {
         archiveCurrentRecords()
         dataStore.saveLastArchiveCheckDate(today)
     }
@@ -926,15 +936,15 @@ fun checkAndArchiveIfNeeded() {
 fun shouldArchive(
     lastCheckDate: String,
     currentDate: LocalDate,
-    currentHour: Int,
-    boundaryHour: Int
+    currentTimeInMinutes: Int,      // 当前时间（分钟数，0-1439）
+    boundaryTimeInMinutes: Int      // 分界点时间（分钟数，0-1439）
 ): Boolean {
     if (lastCheckDate.isEmpty()) return false
     val lastDate = LocalDate.parse(lastCheckDate)
 
     // 日期变化且已过分界点
     if (currentDate.isAfter(lastDate)) {
-        return currentHour >= boundaryHour
+        return currentTimeInMinutes >= boundaryTimeInMinutes
     }
     return false
 }
@@ -1012,19 +1022,80 @@ fun saveAsHistory(title: String) {
 │ 自动归档               [✓]   │  ← 开关
 │ 在分界点自动将事件记录归档到历史
 │                              │
-│ 归档分界点           [凌晨4点]│  ← 时间选择器
+│ 归档分界点             [04:00]│  ← 时间选择器（时:分）
 │ 跨过此时间点时执行归档        │
+│                              │
+│ 历史记录保留            [365天]│  ← 时长选择器
+│ 超过时长的记录将被自动删除    │
 │                              │
 │ 清空所有历史记录             │  ← 危险操作（红色）
 └──────────────────────────────┘
 ```
 
-**分界点选择器**:
-- 凌晨 0 点（自然日）
-- 凌晨 4 点（推荐，默认）
-- 凌晨 6 点
-- 中午 12 点
-- 自定义时间（0-23 点）
+**分界点时间选择器**（点击打开对话框）:
+```
+┌──────────────────────────────┐
+│ 选择归档时间点       [✕]     │
+├──────────────────────────────┤
+│                              │
+│      ┌────┐   :   ┌────┐    │
+│      │ 03 │        │ 45 │    │  ← 可滚动选择器
+│      │ 04 │   :    │ 00 │    │  ← 当前选中（高亮）
+│      │ 05 │        │ 15 │    │
+│      └────┘        └────┘    │
+│       时            分        │
+│                              │
+│ 推荐：凌晨 4:00（避免日常活动时间）
+├──────────────────────────────┤
+│        [取消]    [确定]      │
+└──────────────────────────────┘
+```
+
+**设计说明**:
+- **滚动选择器**：时（0-23）和分（0-59）独立滚动
+- **默认值**：04:00（凌晨 4 点）
+- **显示格式**：HH:mm（24 小时制，补零）
+- **交互方式**：点击设置项打开对话框，滚动选择后确定
+
+---
+
+**历史记录保留时长选择器**（点击打开对话框）:
+```
+┌──────────────────────────────┐
+│ 历史记录保留时长     [✕]     │
+├──────────────────────────────┤
+│                              │
+│ ○ 30 天                      │
+│   节省存储空间               │
+│                              │
+│ ○ 90 天                      │
+│   保留最近三个月             │
+│                              │
+│ ○ 180 天                     │
+│   保留半年记录               │
+│                              │
+│ ● 365 天（推荐）             │  ← 默认选中
+│   保留一年记录               │
+│                              │
+│ ○ 永久保留                   │
+│   不自动删除（需手动清理）   │
+│                              │
+├──────────────────────────────┤
+│        [取消]    [确定]      │
+└──────────────────────────────┘
+```
+
+**设计说明**:
+- **单选列表**：使用 RadioButton 选择
+- **预设选项**：30天、90天、180天、365天（推荐）、永久保留
+- **默认值**：365 天
+- **存储值**：
+  - 30/90/180/365：对应天数
+  - 永久保留：存储为 -1 或 Int.MAX_VALUE
+- **清理逻辑**：
+  - 应用启动时自动清理超过时长的记录
+  - 永久保留时不执行自动清理
+- **说明文案**：每个选项附带简短说明
 
 ##### 8.6 用户交互流程
 
@@ -1032,7 +1103,7 @@ fun saveAsHistory(title: String) {
 ```
 用户使用事件模式记录
     ↓
-时间跨过分界点（如凌晨 4 点）
+时间跨过分界点（如 04:00）
     ↓
 下次打开 App 检测到跨天
     ↓
@@ -1092,45 +1163,580 @@ Toast 提示："昨日记录已归档（5 条）"
 
 ##### 8.7 数据存储策略
 
-**DataStore 键值设计**:
+**存储架构**：采用 **DataStore + Room** 分层存储方案
+
+```
+┌─────────────────────────────────────────┐
+│ DataStore Preferences                   │  ← 轻量级键值对存储
+├─────────────────────────────────────────┤
+│ • 应用设置（主题、震动、归档配置等）     │
+│ • 秒表工作区（状态 + 当前记录）         │
+│ • 事件工作区（当前记录）                │
+└─────────────────────────────────────────┘
+                  ↓ 归档操作
+┌─────────────────────────────────────────┐
+│ Room Database                           │  ← 关系型数据库
+├─────────────────────────────────────────┤
+│ • history_sessions 表（会话元数据）     │
+│ • time_records 表（历史记录）           │
+└─────────────────────────────────────────┘
+```
+
+---
+
+#### DataStore 键值设计
+
+**用途**：存储应用设置和工作区暂存数据
+
 ```kotlin
 object PreferencesKeys {
+    // 归档设置
     val ARCHIVE_BOUNDARY_HOUR = intPreferencesKey("archive_boundary_hour")
+    val ARCHIVE_BOUNDARY_MINUTE = intPreferencesKey("archive_boundary_minute")
     val AUTO_ARCHIVE_ENABLED = booleanPreferencesKey("auto_archive_enabled")
     val LAST_ARCHIVE_CHECK_DATE = stringPreferencesKey("last_archive_check_date")
-}
+    val HISTORY_RETENTION_DAYS = intPreferencesKey("history_retention_days")  // 保留天数（-1表示永久）
 
-// 历史记录使用单独的 DataStore 文件
-object HistoryPreferencesKeys {
-    val HISTORY_SESSIONS = stringPreferencesKey("history_sessions")
+    // 秒表工作区（继续使用现有键）
+    val STOPWATCH_STATUS = stringPreferencesKey("stopwatch_status")
+    val STOPWATCH_RECORDS = stringPreferencesKey("stopwatch_records")
+    // ... 其他秒表状态
+
+    // 事件工作区（继续使用现有键）
+    val EVENT_RECORDS = stringPreferencesKey("event_records")
 }
 ```
 
-**性能优化策略**:
-- 分页加载：按月份分页（避免一次性加载所有历史）
-- 内存缓存：最近 7 天的历史记录
-- 数量限制：最多保留 365 天（自动删除最旧）
+**特点**：
+- ✅ 数据量小（< 100 条记录）
+- ✅ 读写频繁，毫秒级响应
+- ✅ 应用重启快速恢复
+
+---
+
+#### Room 数据库设计
+
+**用途**：存储已归档的历史会话和记录
+
+##### 1. 数据库实体
+
+**会话表**（存储会话元数据）：
+```kotlin
+@Entity(
+    tableName = "history_sessions",
+    indices = [
+        Index(value = ["date"]),           // 按日期查询
+        Index(value = ["session_type"])    // 按类型筛选
+    ]
+)
+data class HistorySessionEntity(
+    @PrimaryKey
+    val id: String,
+
+    val date: String,                      // "yyyy-MM-dd"
+
+    @ColumnInfo(name = "session_type")
+    val sessionType: String,               // "EVENT" or "STOPWATCH"
+
+    val title: String,                     // 会话标题（秒表专用）
+
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long,                   // 创建时间戳
+
+    // 秒表专用字段
+    @ColumnInfo(name = "total_elapsed_nanos")
+    val totalElapsedNanos: Long = 0L,      // 总用时（纳秒）
+
+    @ColumnInfo(name = "start_time")
+    val startTime: Long = 0L,              // 会话开始时间
+
+    @ColumnInfo(name = "end_time")
+    val endTime: Long = 0L                 // 会话结束时间
+)
+```
+
+**记录表**（存储时间记录详情）：
+```kotlin
+@Entity(
+    tableName = "time_records",
+    foreignKeys = [
+        ForeignKey(
+            entity = HistorySessionEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["session_id"],
+            onDelete = ForeignKey.CASCADE  // 级联删除
+        )
+    ],
+    indices = [Index("session_id")]        // 加速关联查询
+)
+data class TimeRecordEntity(
+    @PrimaryKey
+    val id: String,
+
+    @ColumnInfo(name = "session_id")
+    val sessionId: String,                 // 关联会话 ID
+
+    val index: Int,                        // 记录序号
+
+    @ColumnInfo(name = "wall_clock_time")
+    val wallClockTime: Long,               // 标记时刻（毫秒）
+
+    @ColumnInfo(name = "elapsed_time_nanos")
+    val elapsedTimeNanos: Long,            // 累计时间（纳秒）
+
+    @ColumnInfo(name = "split_time_nanos")
+    val splitTimeNanos: Long,              // 时间差（纳秒）
+
+    val note: String                       // 备注
+)
+```
+
+##### 2. DAO 接口
+
+```kotlin
+@Dao
+interface HistoryDao {
+
+    // ========== 查询操作 ==========
+
+    /**
+     * 查询指定日期的所有会话（用于历史页面）
+     */
+    @Transaction
+    @Query("""
+        SELECT * FROM history_sessions
+        WHERE date = :date AND session_type = :sessionType
+        ORDER BY created_at ASC
+    """)
+    fun getSessionsByDate(date: String, sessionType: String): Flow<List<HistorySessionEntity>>
+
+    /**
+     * 查询指定会话的所有记录
+     */
+    @Query("""
+        SELECT * FROM time_records
+        WHERE session_id = :sessionId
+        ORDER BY index ASC
+    """)
+    fun getRecordsBySessionId(sessionId: String): Flow<List<TimeRecordEntity>>
+
+    /**
+     * 查询包含记录的日期列表（用于日历标记）
+     */
+    @Query("""
+        SELECT DISTINCT date FROM history_sessions
+        WHERE session_type = :sessionType
+        ORDER BY date DESC
+    """)
+    fun getDatesWithRecords(sessionType: String): Flow<List<String>>
+
+    /**
+     * 查询指定日期的会话数量
+     */
+    @Query("""
+        SELECT COUNT(*) FROM history_sessions
+        WHERE date = :date AND session_type = :sessionType
+    """)
+    suspend fun getSessionCountByDate(date: String, sessionType: String): Int
+
+    /**
+     * 查询指定会话的记录数量
+     */
+    @Query("""
+        SELECT COUNT(*) FROM time_records
+        WHERE session_id = :sessionId
+    """)
+    suspend fun getRecordCountBySessionId(sessionId: String): Int
+
+    // ========== 插入操作 ==========
+
+    /**
+     * 插入会话（归档时使用）
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSession(session: HistorySessionEntity)
+
+    /**
+     * 批量插入记录（归档时使用）
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRecords(records: List<TimeRecordEntity>)
+
+    /**
+     * 归档会话（事务操作，保证原子性）
+     */
+    @Transaction
+    suspend fun archiveSession(session: HistorySessionEntity, records: List<TimeRecordEntity>) {
+        insertSession(session)
+        insertRecords(records)
+    }
+
+    // ========== 更新操作 ==========
+
+    /**
+     * 更新会话标题（秒表模式编辑标题）
+     */
+    @Query("UPDATE history_sessions SET title = :title WHERE id = :sessionId")
+    suspend fun updateSessionTitle(sessionId: String, title: String)
+
+    /**
+     * 更新记录备注（编辑单条记录）
+     */
+    @Query("UPDATE time_records SET note = :note WHERE id = :recordId")
+    suspend fun updateRecordNote(recordId: String, note: String)
+
+    // ========== 删除操作 ==========
+
+    /**
+     * 删除指定会话（级联删除所有记录）
+     */
+    @Query("DELETE FROM history_sessions WHERE id = :sessionId")
+    suspend fun deleteSession(sessionId: String)
+
+    /**
+     * 删除指定日期的所有事件会话（事件模式删除当天）
+     */
+    @Query("""
+        DELETE FROM history_sessions
+        WHERE date = :date AND session_type = 'EVENT'
+    """)
+    suspend fun deleteEventSessionsByDate(date: String)
+
+    /**
+     * 删除单条记录
+     */
+    @Query("DELETE FROM time_records WHERE id = :recordId")
+    suspend fun deleteRecord(recordId: String)
+
+    /**
+     * 清空所有历史记录（设置页面危险操作）
+     */
+    @Query("DELETE FROM history_sessions")
+    suspend fun deleteAllSessions()
+
+    /**
+     * 删除指定日期之前的旧数据（自动清理）
+     */
+    @Query("DELETE FROM history_sessions WHERE date < :beforeDate")
+    suspend fun deleteSessionsBeforeDate(beforeDate: String)
+}
+```
+
+##### 3. Database 类
+
+```kotlin
+@Database(
+    entities = [
+        HistorySessionEntity::class,
+        TimeRecordEntity::class
+    ],
+    version = 1,
+    exportSchema = true
+)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun historyDao(): HistoryDao
+
+    companion object {
+        @Volatile
+        private var INSTANCE: AppDatabase? = null
+
+        fun getDatabase(context: Context): AppDatabase {
+            return INSTANCE ?: synchronized(this) {
+                val instance = Room.databaseBuilder(
+                    context.applicationContext,
+                    AppDatabase::class.java,
+                    "chronomark_database"
+                )
+                    .fallbackToDestructiveMigration()  // 开发阶段可用
+                    .build()
+                INSTANCE = instance
+                instance
+            }
+        }
+    }
+}
+```
+
+##### 4. Repository 层
+
+```kotlin
+class HistoryRepository(
+    private val historyDao: HistoryDao,
+    private val dataStoreManager: DataStoreManager
+) {
+
+    /**
+     * 归档事件模式记录
+     */
+    suspend fun archiveEventRecords(records: List<TimeRecord>): Result<Unit> {
+        return try {
+            if (records.isEmpty()) {
+                return Result.failure(Exception("No records to archive"))
+            }
+
+            val yesterday = LocalDate.now().minusDays(1).toString()
+            val session = HistorySessionEntity(
+                id = UUID.randomUUID().toString(),
+                date = yesterday,
+                sessionType = "EVENT",
+                title = "",
+                createdAt = System.currentTimeMillis()
+            )
+
+            val recordEntities = records.map { record ->
+                TimeRecordEntity(
+                    id = record.id,
+                    sessionId = session.id,
+                    index = record.index,
+                    wallClockTime = record.wallClockTime,
+                    elapsedTimeNanos = record.elapsedTimeNanos,
+                    splitTimeNanos = record.splitTimeNanos,
+                    note = record.note
+                )
+            }
+
+            historyDao.archiveSession(session, recordEntities)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 归档秒表模式记录
+     */
+    suspend fun archiveStopwatchRecords(
+        records: List<TimeRecord>,
+        title: String,
+        startTime: Long,
+        totalElapsedNanos: Long
+    ): Result<Unit> {
+        return try {
+            if (records.isEmpty()) {
+                return Result.failure(Exception("No records to archive"))
+            }
+
+            val today = LocalDate.now().toString()
+            val session = HistorySessionEntity(
+                id = UUID.randomUUID().toString(),
+                date = today,
+                sessionType = "STOPWATCH",
+                title = title,
+                createdAt = startTime,
+                startTime = startTime,
+                endTime = System.currentTimeMillis(),
+                totalElapsedNanos = totalElapsedNanos
+            )
+
+            val recordEntities = records.map { record ->
+                TimeRecordEntity(
+                    id = record.id,
+                    sessionId = session.id,
+                    index = record.index,
+                    wallClockTime = record.wallClockTime,
+                    elapsedTimeNanos = record.elapsedTimeNanos,
+                    splitTimeNanos = record.splitTimeNanos,
+                    note = record.note
+                )
+            }
+
+            historyDao.archiveSession(session, recordEntities)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 查询指定日期的会话列表
+     */
+    fun getSessionsByDate(date: String, sessionType: String): Flow<List<HistorySessionEntity>> {
+        return historyDao.getSessionsByDate(date, sessionType)
+    }
+
+    /**
+     * 查询指定会话的记录列表
+     */
+    fun getRecordsBySessionId(sessionId: String): Flow<List<TimeRecordEntity>> {
+        return historyDao.getRecordsBySessionId(sessionId)
+    }
+
+    /**
+     * 自动清理旧数据（根据用户设置的保留天数）
+     */
+    suspend fun cleanupOldData(retentionDays: Int) {
+        // retentionDays = -1 表示永久保留，不执行清理
+        if (retentionDays < 0) return
+
+        val cutoffDate = LocalDate.now().minusDays(retentionDays.toLong()).toString()
+        historyDao.deleteSessionsBeforeDate(cutoffDate)
+    }
+}
+```
+
+---
+
+#### 数据流转流程
+
+**事件模式自动归档**：
+```kotlin
+// EventViewModel.kt
+suspend fun autoArchive() {
+    val records = _uiState.value.records
+    if (records.isEmpty()) return
+
+    // 1. 归档到 Room
+    historyRepository.archiveEventRecords(records)
+        .onSuccess {
+            // 2. 清空 DataStore 工作区
+            dataStoreManager.clearEventRecords()
+
+            // 3. 更新 UI 状态
+            _uiState.update { it.copy(records = emptyList()) }
+
+            // 4. 提示用户
+            _toastMessage.value = "昨日记录已归档（${records.size} 条）"
+        }
+        .onFailure { e ->
+            Log.e(TAG, "Archive failed", e)
+            _toastMessage.value = "归档失败，请重试"
+        }
+}
+```
+
+**秒表模式手动归档**：
+```kotlin
+// StopwatchViewModel.kt
+suspend fun saveToHistory(title: String) {
+    val records = _uiState.value.records
+    if (records.isEmpty()) return
+
+    // 1. 归档到 Room
+    historyRepository.archiveStopwatchRecords(
+        records = records,
+        title = title,
+        startTime = startWallClockTime,
+        totalElapsedNanos = _uiState.value.currentTimeNanos
+    )
+        .onSuccess {
+            // 2. 清空 DataStore 工作区
+            dataStoreManager.clearStopwatchRecords()
+
+            // 3. 重置状态
+            reset()
+
+            // 4. 提示用户
+            _toastMessage.value = "已保存到历史记录"
+        }
+        .onFailure { e ->
+            Log.e(TAG, "Save to history failed", e)
+            _toastMessage.value = "保存失败，请重试"
+        }
+}
+```
+
+---
+
+#### 性能优化策略
+
+1. **索引优化**：
+   - `date` 字段索引：加速按日期查询
+   - `session_type` 字段索引：加速按类型筛选
+   - `session_id` 外键索引：加速关联查询
+
+2. **分页加载**：
+   - 使用 Jetpack Paging 3 库
+   - 按需加载，避免一次性读取所有数据
+
+3. **Flow 响应式查询**：
+   - 自动监听数据变化
+   - UI 自动更新，无需手动刷新
+
+4. **自动清理**：
+   - 应用启动时检查并删除 365 天前的数据
+   - 保持数据库大小可控
+
+5. **事务保证**：
+   - 归档操作使用事务（`@Transaction`）
+   - 保证会话和记录一起成功或失败
 
 ##### 8.8 核心任务清单
 
-1. **数据模型**（优先级：⭐⭐⭐⭐⭐）
-   - [ ] 创建 `HistorySession` 和 `SessionType`
-   - [ ] 扩展 `DataStoreManager` 支持历史记录存储
-   - [ ] 添加序列化支持
+1. **Room 数据库搭建**（优先级：⭐⭐⭐⭐⭐）
+   - [ ] 添加 Room 依赖到 `build.gradle.kts`
+     ```kotlin
+     implementation("androidx.room:room-runtime:2.6.1")
+     implementation("androidx.room:room-ktx:2.6.1")
+     ksp("androidx.room:room-compiler:2.6.1")
+     ```
+   - [ ] 创建 `HistorySessionEntity` 实体类
+     - [ ] 定义表结构和字段
+     - [ ] 添加索引（date, session_type）
+   - [ ] 创建 `TimeRecordEntity` 实体类
+     - [ ] 定义表结构和字段
+     - [ ] 添加外键关联（级联删除）
+     - [ ] 添加索引（session_id）
+   - [ ] 创建 `HistoryDao` 接口
+     - [ ] 查询操作（按日期、按会话、统计）
+     - [ ] 插入操作（归档会话和记录）
+     - [ ] 更新操作（编辑标题、备注）
+     - [ ] 删除操作（删除会话、记录、清空历史）
+   - [ ] 创建 `AppDatabase` 类
+     - [ ] 配置数据库（version = 1）
+     - [ ] 实现单例模式
+   - [ ] 创建 `HistoryRepository` 类
+     - [ ] 归档事件记录方法
+     - [ ] 归档秒表记录方法
+     - [ ] 查询历史数据方法
+     - [ ] 自动清理旧数据方法
 
-2. **自动归档逻辑**（优先级：⭐⭐⭐⭐⭐）
+2. **DataStore 扩展**（优先级：⭐⭐⭐⭐⭐）
+   - [ ] 添加归档设置键值
+     - [ ] `ARCHIVE_BOUNDARY_HOUR`
+     - [ ] `ARCHIVE_BOUNDARY_MINUTE`
+     - [ ] `AUTO_ARCHIVE_ENABLED`
+     - [ ] `LAST_ARCHIVE_CHECK_DATE`
+     - [ ] `HISTORY_RETENTION_DAYS`（默认 365，-1 表示永久）
+   - [ ] 添加保存/读取归档设置方法
+     - [ ] `getHistoryRetentionDays()` / `saveHistoryRetentionDays(days: Int)`
+   - [ ] 添加清空工作区方法
+     - [ ] `clearEventRecords()`
+     - [ ] `clearStopwatchRecords()`
+
+3. **自动归档逻辑**（优先级：⭐⭐⭐⭐⭐）
    - [ ] 实现跨天检测（`shouldArchive`）
-   - [ ] `EventViewModel` 自动归档
-   - [ ] `MainActivity` 启动检查
-   - [ ] Toast 提示
+     - [ ] 使用分钟级时间比较（0-1439）
+     - [ ] 检查 `LAST_ARCHIVE_CHECK_DATE`
+   - [ ] `EventViewModel` 添加自动归档方法
+     - [ ] 归档到 Room 数据库
+     - [ ] 清空 DataStore 工作区
+     - [ ] Toast 提示用户
+   - [ ] `MainActivity` 启动时检查归档
+     - [ ] `onResume` 调用 `checkAndArchiveIfNeeded`
+     - [ ] 更新 `LAST_ARCHIVE_CHECK_DATE`
 
-3. **设置页面**（优先级：⭐⭐⭐⭐）
+4. **设置页面**（优先级：⭐⭐⭐⭐）
    - [ ] 自动归档开关
-   - [ ] 分界点时间选择器
-   - [ ] 清空历史按钮
+   - [ ] 分界点时间选择器（支持时:分精确选择，滚动选择器）
+     - [ ] 点击设置项打开时间选择器对话框
+     - [ ] 时（0-23）和分（0-59）独立滚动选择
+     - [ ] 显示格式 HH:mm（24 小时制）
+   - [ ] 历史记录保留时长选择器
+     - [ ] 点击设置项打开单选对话框
+     - [ ] 预设选项：30天、90天、180天、365天（推荐）、永久保留
+     - [ ] 显示格式："365天" 或 "永久保留"
+     - [ ] 存储值：30/90/180/365 或 -1（永久）
+   - [ ] 清空历史按钮（调用 `historyDao.deleteAllSessions()`）
    - [ ] 设置项持久化
+     - [ ] `archiveBoundaryHour` 和 `archiveBoundaryMinute`
+     - [ ] `historyRetentionDays`
 
-4. **历史记录 UI**（优先级：⭐⭐⭐⭐）
+5. **历史记录 UI**（优先级：⭐⭐⭐⭐）
+   - [ ] 创建 `HistoryViewModel`
+     - [ ] 依赖注入 `HistoryRepository`
+     - [ ] 管理选中日期、会话索引、模式状态
+     - [ ] 提供 Flow 数据流（会话列表、记录列表）
+   - [ ] 创建 `HistoryViewModelFactory`
    - [ ] 在事件/秒表页面 TopAppBar 添加历史按钮（位于分享和设置按钮之间）
    - [ ] `HistoryScreen` 页面框架（复用主页布局结构）
    - [ ] 从主页传递当前模式到历史页面（导航参数）
@@ -1177,41 +1783,75 @@ object HistoryPreferencesKeys {
    - [ ] 会话切换动画（淡入淡出）
    - [ ] 返回键处理（BackHandler，返回主页）
 
-5. **秒表手动归档**（优先级：⭐⭐⭐）
+6. **秒表手动归档**（优先级：⭐⭐⭐）
+   - [ ] `StopwatchViewModel` 添加 `HistoryRepository` 依赖
    - [ ] 停止后"保存到历史"确认对话框
    - [ ] 输入会话标题对话框
      - [ ] 生成默认标题："会话 HH:mm"（基于开始时间）
      - [ ] 输入框预填充默认标题
      - [ ] 用户可直接确认或修改标题
-   - [ ] 保存到历史（使用用户确认或修改后的标题）
+   - [ ] `saveToHistory()` 方法实现
+     - [ ] 调用 `historyRepository.archiveStopwatchRecords()`
+     - [ ] 清空 DataStore 工作区
+     - [ ] 重置 ViewModel 状态
 
-6. **分享与管理**（优先级：⭐⭐⭐）
+7. **分享与管理**（优先级：⭐⭐⭐）
+   - [ ] 扩展 `ShareHelper` 支持历史会话分享
+     - [ ] `generateHistoryShareText(session, records)` 方法
    - [ ] 历史记录页面分享功能
-   - [ ] 事件模式：分享该天的所有事件记录
-   - [ ] 秒表模式：分享当前选中的会话（只分享当前会话，不是该天所有会话）
+     - [ ] 复用现有 ShareHelper 工具类（与主页分享功能接口统一）
+     - [ ] 通过系统分享面板分享（Intent.ACTION_SEND）
+   - [ ] 事件模式：分享该天的所有事件记录（格式与主页一致）
+   - [ ] 秒表模式：分享当前选中的会话（只分享当前会话，不是该天所有会话，格式与主页一致）
    - [ ] 控制按钮区功能
      - [ ] 事件模式：删除当天所有记录（带确认对话框）
      - [ ] 秒表模式：编辑会话标题 + 删除会话（两个按钮）
        - [ ] 编辑标题按钮：弹出对话框修改当前会话标题
        - [ ] 删除按钮：删除当前会话所有记录（带确认对话框）
-   - [ ] 编辑单条记录备注（复用现有对话框，点击记录卡片触发）
-   - [ ] 删除单条记录（带确认对话框，从记录编辑对话框触发）
+   - [ ] 编辑单条记录备注
+     - [ ] 复用现有备注编辑对话框
+     - [ ] 调用 `historyDao.updateRecordNote()`
+   - [ ] 删除单条记录
+     - [ ] 带确认对话框
+     - [ ] 调用 `historyDao.deleteRecord()`
 
-7. **性能优化**（优先级：⭐⭐）
-   - [ ] 分页加载（按月份）
-   - [ ] 内存缓存（最近 7 天）
-   - [ ] 数量限制（365 天）
+8. **性能优化与测试**（优先级：⭐⭐）
+   - [ ] 实现自动清理旧数据
+     - [ ] 应用启动时调用 `historyRepository.cleanupOldData(retentionDays)`
+     - [ ] 从 DataStore 读取用户配置的保留天数
+     - [ ] 如果设置为永久保留（-1）则跳过清理
+   - [ ] 使用 Flow 响应式查询
+     - [ ] 自动监听数据库变化
+     - [ ] UI 自动更新
+   - [ ] （可选）集成 Paging 3 实现分页加载
+   - [ ] 测试大量数据场景（1000+ 条记录）
+   - [ ] 测试归档操作的事务性（失败回滚）
 
-8. **边缘情况**（优先级：⭐⭐⭐）
-   - [ ] 空历史记录状态
-   - [ ] 归档失败处理
-   - [ ] 数据迁移兼容性
+9. **边缘情况处理**（优先级：⭐⭐⭐）
+   - [ ] 空历史记录状态显示
+   - [ ] 归档失败错误处理（Toast 提示）
+   - [ ] 数据库操作异常处理（try-catch）
+   - [ ] 并发归档冲突处理
+   - [ ] 数据库版本迁移策略（预留）
+
+---
 
 **技术要点**:
+- 使用 Room 数据库存储历史记录（支持大数据量）
+- DataStore 仅用于工作区暂存和应用设置
 - 使用 `java.time` API 进行日期计算
-- 日历视图标记有记录的日期（小圆点）
-- 历史记录使用独立的 DataStore 文件
-- 分页加载避免性能问题
+- 归档操作使用事务保证原子性
+- Flow 响应式查询自动更新 UI
+- 索引优化加速查询性能
+- **历史记录保留时长**：
+  - 用户可配置：30天、90天、180天、365天（推荐）、永久保留
+  - 应用启动时自动清理超过时长的记录
+  - 永久保留时不执行自动清理
+- **分享功能接口统一**：
+  - 复用现有 ShareHelper 工具类（Phase 6 已实现）
+  - 历史记录和主页使用相同的文本格式化逻辑
+  - 通过系统分享面板分享（Intent.ACTION_SEND）
+  - 只需扩展 ShareHelper 支持从 Room Entity 转换为分享文本
 
 **未来扩展**:
 - 统计功能（记录数趋势图）
