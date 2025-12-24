@@ -23,6 +23,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.chy5301.chronomark.data.DataStoreManager
+import io.github.chy5301.chronomark.data.database.AppDatabase
+import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.AppMode
 import io.github.chy5301.chronomark.viewmodel.EventViewModel
 import io.github.chy5301.chronomark.viewmodel.EventViewModelFactory
@@ -38,6 +40,10 @@ import kotlinx.coroutines.launch
 fun MainScreen() {
     val context = LocalContext.current
     val dataStoreManager = remember { DataStoreManager(context) }
+    val historyRepository = remember {
+        val database = AppDatabase.getDatabase(context)
+        HistoryRepository(database.historyDao())
+    }
     val coroutineScope = rememberCoroutineScope()
 
     // 从 DataStore 读取当前模式
@@ -48,7 +54,7 @@ fun MainScreen() {
         factory = StopwatchViewModelFactory(dataStoreManager)
     )
     val eventViewModel: EventViewModel = viewModel(
-        factory = EventViewModelFactory(dataStoreManager)
+        factory = EventViewModelFactory(dataStoreManager, historyRepository)
     )
 
     // 设置页面导航状态
