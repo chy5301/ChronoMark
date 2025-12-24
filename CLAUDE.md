@@ -620,26 +620,9 @@ ChronoMark 事件记录
 
 ##### 8.1 数据模型设计
 
-**历史会话数据结构**:
+**会话类型枚举**:
 ```kotlin
-// 历史记录（一天或一次秒表会话）
-@Serializable
-data class HistorySession(
-    val id: String = UUID.randomUUID().toString(),
-    val date: String,                          // 日期标识（yyyy-MM-dd）
-    val sessionType: SessionType,              // 会话类型（事件/秒表）
-    val records: List<TimeRecord>,             // 记录列表
-    val createdAt: Long,                       // 创建时间戳（毫秒）
-    val title: String = "",                    // 可选标题（用户可编辑）
-
-    // 秒表专用字段
-    val totalElapsedNanos: Long = 0L,          // 总用时（纳秒）
-    val startTime: Long = 0L,                  // 会话开始时间
-    val endTime: Long = 0L                     // 会话结束时间
-)
-
-// 会话类型
-@Serializable
+// data/model/SessionType.kt
 enum class SessionType {
     EVENT,      // 事件模式
     STOPWATCH   // 秒表模式
@@ -648,15 +631,22 @@ enum class SessionType {
 
 **历史 UI 状态**:
 ```kotlin
+// data/model/HistoryUiState.kt
 data class HistoryUiState(
     val currentMode: SessionType = SessionType.EVENT,  // 当前选中模式（事件/秒表）
     val selectedDate: LocalDate = LocalDate.now(),     // 当前选中日期
-    val sessions: List<HistorySession> = emptyList(),  // 当前选中日期的会话列表
+    val sessions: List<HistorySessionEntity> = emptyList(),  // 当前选中日期的会话列表
+    val selectedSessionRecords: List<TimeRecordEntity> = emptyList(),  // 当前会话的记录
     val currentSessionIndex: Int = 0,                  // 当前选中的会话索引（秒表模式）
     val datesWithRecords: Set<LocalDate> = emptySet(), // 有记录的日期集合（日历标记用）
     val isLoading: Boolean = false
 )
 ```
+
+**设计说明**：
+- 直接使用 Room Entity（`HistorySessionEntity` + `TimeRecordEntity`）作为数据模型
+- 避免 Entity ↔ Domain 层转换，简化架构
+- ViewModel 通过 Flow 响应式查询获取数据
 
 **设置项扩展**:
 ```kotlin
@@ -939,7 +929,12 @@ fun shouldArchive(
     currentTimeInMinutes: Int,      // 当前时间（分钟数，0-1439）
     boundaryTimeInMinutes: Int      // 分界点时间（分钟数，0-1439）
 ): Boolean {
-    if (lastCheckDate.isEmpty()) return false
+    // 首次使用，初始化为当前日期，不触发归档
+    if (lastCheckDate.isEmpty()) {
+        dataStore.saveLastArchiveCheckDate(currentDate.toString())
+        return false
+    }
+
     val lastDate = LocalDate.parse(lastCheckDate)
 
     // 日期变化且已过分界点
@@ -950,26 +945,37 @@ fun shouldArchive(
 }
 ```
 
+**设计说明**：
+- **首次使用处理**：当 `lastCheckDate` 为空时，自动初始化为当前日期，避免首次跨天时归档失败
+- **分界点判断**：只有在日期变化且当前时间已过分界点时才触发归档
+- **防重复归档**：通过更新 `lastCheckDate` 确保同一天只归档一次
+
 **归档操作**:
 ```kotlin
 // EventViewModel - 自动归档
-suspend fun archiveCurrentRecords() {
+suspend fun autoArchive() {
+    val records = _uiState.value.records
     if (records.isEmpty()) return
 
-    val session = HistorySession(
-        date = LocalDate.now().minusDays(1).toString(),
-        sessionType = SessionType.EVENT,
-        records = records.toList(),
-        createdAt = System.currentTimeMillis(),
-        title = "事件记录"
-    )
+    // 1. 归档到 Room 数据库
+    historyRepository.archiveEventRecords(records)
+        .onSuccess {
+            // 2. 清空 DataStore 工作区
+            dataStoreManager.clearEventRecords()
 
-    dataStoreManager.saveHistorySession(session)
-    _uiState.update { it.copy(records = emptyList()) }
-    dataStoreManager.clearEventRecords()
+            // 3. 更新 UI 状态
+            _uiState.update { it.copy(records = emptyList()) }
+
+            // 4. 提示用户
+            _toastMessage.value = "昨日记录已归档（${records.size} 条）"
+        }
+        .onFailure { e ->
+            Log.e(TAG, "Archive failed", e)
+            _toastMessage.value = "归档失败，请重试"
+        }
 }
 
-// StopwatchViewModel - 手动归档
+// StopwatchViewModel - 生成默认标题
 fun getDefaultTitle(): String {
     // 生成默认标题：基于开始时间 "会话 HH:mm"
     val formatter = DateTimeFormatter.ofPattern("HH:mm")
@@ -979,20 +985,32 @@ fun getDefaultTitle(): String {
     return "会话 $time"
 }
 
-fun saveAsHistory(title: String) {
+// StopwatchViewModel - 手动归档
+suspend fun saveToHistory(title: String) {
+    val records = _uiState.value.records
     if (records.isEmpty()) return
 
-    val session = HistorySession(
-        date = LocalDate.now().toString(),
-        sessionType = SessionType.STOPWATCH,
-        records = records.toList(),
-        createdAt = startWallClockTime,
-        endTime = System.currentTimeMillis(),
-        totalElapsedNanos = currentTimeNanos,
-        title = title  // 保存用户输入或确认的标题
+    // 1. 归档到 Room 数据库
+    historyRepository.archiveStopwatchRecords(
+        records = records,
+        title = title,
+        startTime = startWallClockTime,
+        totalElapsedNanos = _uiState.value.currentTimeNanos
     )
+        .onSuccess {
+            // 2. 清空 DataStore 工作区
+            dataStoreManager.clearStopwatchRecords()
 
-    dataStoreManager.saveHistorySession(session)
+            // 3. 重置状态
+            reset()
+
+            // 4. 提示用户
+            _toastMessage.value = "已保存到历史记录"
+        }
+        .onFailure { e ->
+            Log.e(TAG, "Save to history failed", e)
+            _toastMessage.value = "保存失败，请重试"
+        }
 }
 ```
 
@@ -1222,6 +1240,7 @@ object PreferencesKeys {
 
 **会话表**（存储会话元数据）：
 ```kotlin
+// data/database/entity/HistorySessionEntity.kt
 @Entity(
     tableName = "history_sessions",
     indices = [
@@ -1236,7 +1255,7 @@ data class HistorySessionEntity(
     val date: String,                      // "yyyy-MM-dd"
 
     @ColumnInfo(name = "session_type")
-    val sessionType: String,               // "EVENT" or "STOPWATCH"
+    val sessionType: SessionType,          // ← 直接使用 enum（通过 TypeConverter 转换）
 
     val title: String,                     // 会话标题（秒表专用）
 
@@ -1257,6 +1276,7 @@ data class HistorySessionEntity(
 
 **记录表**（存储时间记录详情）：
 ```kotlin
+// data/database/entity/TimeRecordEntity.kt
 @Entity(
     tableName = "time_records",
     foreignKeys = [
@@ -1291,6 +1311,32 @@ data class TimeRecordEntity(
 )
 ```
 
+**类型转换器**（SessionType ↔ String）：
+```kotlin
+// data/database/Converters.kt
+import androidx.room.TypeConverter
+import io.github.chy5301.chronomark.data.model.SessionType
+
+class Converters {
+    @TypeConverter
+    fun fromSessionType(value: SessionType): String {
+        return value.name  // EVENT → "EVENT", STOPWATCH → "STOPWATCH"
+    }
+
+    @TypeConverter
+    fun toSessionType(value: String): SessionType {
+        return SessionType.valueOf(value)  // "EVENT" → EVENT
+    }
+}
+```
+
+**设计说明**：
+- Room 只支持基本类型（Int、String 等），不支持 enum
+- TypeConverter 让我们在代码中使用 enum，数据库中存储 String
+- 转换过程对开发者透明，Room 自动调用
+- 数据库中实际存储："EVENT"、"STOPWATCH"（字符串）
+- 代码中使用：`SessionType.EVENT`、`SessionType.STOPWATCH`（enum）
+
 ##### 2. DAO 接口
 
 ```kotlin
@@ -1308,7 +1354,7 @@ interface HistoryDao {
         WHERE date = :date AND session_type = :sessionType
         ORDER BY created_at ASC
     """)
-    fun getSessionsByDate(date: String, sessionType: String): Flow<List<HistorySessionEntity>>
+    fun getSessionsByDate(date: String, sessionType: SessionType): Flow<List<HistorySessionEntity>>
 
     /**
      * 查询指定会话的所有记录
@@ -1328,7 +1374,7 @@ interface HistoryDao {
         WHERE session_type = :sessionType
         ORDER BY date DESC
     """)
-    fun getDatesWithRecords(sessionType: String): Flow<List<String>>
+    fun getDatesWithRecords(sessionType: SessionType): Flow<List<String>>
 
     /**
      * 查询指定日期的会话数量
@@ -1337,7 +1383,7 @@ interface HistoryDao {
         SELECT COUNT(*) FROM history_sessions
         WHERE date = :date AND session_type = :sessionType
     """)
-    suspend fun getSessionCountByDate(date: String, sessionType: String): Int
+    suspend fun getSessionCountByDate(date: String, sessionType: SessionType): Int
 
     /**
      * 查询指定会话的记录数量
@@ -1394,13 +1440,13 @@ interface HistoryDao {
     suspend fun deleteSession(sessionId: String)
 
     /**
-     * 删除指定日期的所有事件会话（事件模式删除当天）
+     * 删除指定日期和类型的会话（通用方法）
      */
     @Query("""
         DELETE FROM history_sessions
-        WHERE date = :date AND session_type = 'EVENT'
+        WHERE date = :date AND session_type = :sessionType
     """)
-    suspend fun deleteEventSessionsByDate(date: String)
+    suspend fun deleteSessionsByDateAndType(date: String, sessionType: SessionType)
 
     /**
      * 删除单条记录
@@ -1425,6 +1471,7 @@ interface HistoryDao {
 ##### 3. Database 类
 
 ```kotlin
+// data/database/AppDatabase.kt
 @Database(
     entities = [
         HistorySessionEntity::class,
@@ -1433,6 +1480,7 @@ interface HistoryDao {
     version = 1,
     exportSchema = true
 )
+@TypeConverters(Converters::class)  // ← 注册类型转换器
 abstract class AppDatabase : RoomDatabase() {
     abstract fun historyDao(): HistoryDao
 
@@ -1478,7 +1526,7 @@ class HistoryRepository(
             val session = HistorySessionEntity(
                 id = UUID.randomUUID().toString(),
                 date = yesterday,
-                sessionType = "EVENT",
+                sessionType = SessionType.EVENT,  // ← 使用 enum
                 title = "",
                 createdAt = System.currentTimeMillis()
             )
@@ -1520,7 +1568,7 @@ class HistoryRepository(
             val session = HistorySessionEntity(
                 id = UUID.randomUUID().toString(),
                 date = today,
-                sessionType = "STOPWATCH",
+                sessionType = SessionType.STOPWATCH,  // ← 使用 enum
                 title = title,
                 createdAt = startTime,
                 startTime = startTime,
@@ -1550,7 +1598,7 @@ class HistoryRepository(
     /**
      * 查询指定日期的会话列表
      */
-    fun getSessionsByDate(date: String, sessionType: String): Flow<List<HistorySessionEntity>> {
+    fun getSessionsByDate(date: String, sessionType: SessionType): Flow<List<HistorySessionEntity>> {
         return historyDao.getSessionsByDate(date, sessionType)
     }
 
@@ -1563,13 +1611,28 @@ class HistoryRepository(
 
     /**
      * 自动清理旧数据（根据用户设置的保留天数）
+     *
+     * @param retentionDays 保留天数（-1 表示永久保留，不执行清理）
+     * @return Result<Unit> 成功或失败结果
      */
-    suspend fun cleanupOldData(retentionDays: Int) {
-        // retentionDays = -1 表示永久保留，不执行清理
-        if (retentionDays < 0) return
+    suspend fun cleanupOldData(retentionDays: Int): Result<Unit> {
+        return try {
+            // 永久保留或无效值（防止整型溢出）
+            if (retentionDays < 0 || retentionDays > 36500) {
+                return Result.success(Unit)
+            }
 
-        val cutoffDate = LocalDate.now().minusDays(retentionDays.toLong()).toString()
-        historyDao.deleteSessionsBeforeDate(cutoffDate)
+            val cutoffDate = LocalDate.now()
+                .minusDays(retentionDays.toLong())
+                .toString()
+
+            historyDao.deleteSessionsBeforeDate(cutoffDate)
+            Log.i(TAG, "Cleaned up data before $cutoffDate")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to cleanup old data", e)
+            Result.failure(e)
+        }
     }
 }
 ```
@@ -1653,8 +1716,24 @@ suspend fun saveToHistory(title: String) {
    - UI 自动更新，无需手动刷新
 
 4. **自动清理**：
-   - 应用启动时检查并删除 365 天前的数据
+   - 应用启动时检查并删除过期数据（根据用户设置的保留天数）
    - 保持数据库大小可控
+   - 清理失败不影响应用启动（优雅降级）
+   - 示例代码：
+     ```kotlin
+     // MainActivity.onCreate
+     lifecycleScope.launch {
+         val retentionDays = dataStoreManager.getHistoryRetentionDays()
+         historyRepository.cleanupOldData(retentionDays)
+             .onSuccess {
+                 Log.i(TAG, "Old data cleanup completed")
+             }
+             .onFailure { e ->
+                 // 清理失败不影响应用启动，只记录日志
+                 Log.w(TAG, "Cleanup failed but app continues", e)
+             }
+     }
+     ```
 
 5. **事务保证**：
    - 归档操作使用事务（`@Transaction`）
@@ -1805,6 +1884,7 @@ suspend fun saveToHistory(title: String) {
    - [ ] 秒表模式：分享当前选中的会话（只分享当前会话，不是该天所有会话，格式与主页一致）
    - [ ] 控制按钮区功能
      - [ ] 事件模式：删除当天所有记录（带确认对话框）
+       - [ ] 调用 `historyDao.deleteSessionsByDateAndType(date, SessionType.EVENT)`
      - [ ] 秒表模式：编辑会话标题 + 删除会话（两个按钮）
        - [ ] 编辑标题按钮：弹出对话框修改当前会话标题
        - [ ] 删除按钮：删除当前会话所有记录（带确认对话框）
@@ -1820,6 +1900,8 @@ suspend fun saveToHistory(title: String) {
      - [ ] 应用启动时调用 `historyRepository.cleanupOldData(retentionDays)`
      - [ ] 从 DataStore 读取用户配置的保留天数
      - [ ] 如果设置为永久保留（-1）则跳过清理
+     - [ ] 使用 `.onFailure` 处理清理失败（优雅降级，不影响应用启动）
+     - [ ] 添加边界检查（防止 retentionDays > 36500 导致整型溢出）
    - [ ] 使用 Flow 响应式查询
      - [ ] 自动监听数据库变化
      - [ ] UI 自动更新
