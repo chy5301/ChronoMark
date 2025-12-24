@@ -15,9 +15,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.github.chy5301.chronomark.data.DataStoreManager
+import io.github.chy5301.chronomark.data.database.AppDatabase
+import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.ThemeMode
 import kotlinx.coroutines.launch
 import android.content.pm.PackageManager
+import java.util.Locale
 
 /**
  * 设置页面
@@ -29,15 +32,28 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val dataStoreManager = remember { DataStoreManager(context) }
+    val historyRepository = remember {
+        val database = AppDatabase.getDatabase(context)
+        HistoryRepository(database.historyDao())
+    }
     val coroutineScope = rememberCoroutineScope()
 
-    // 从 DataStore 读取设置
+    // 从 DataStore 读取常规设置
     val keepScreenOn by dataStoreManager.keepScreenOnFlow.collectAsState(initial = false)
     val vibrationEnabled by dataStoreManager.vibrationEnabledFlow.collectAsState(initial = true)
     val themeMode by dataStoreManager.themeModeFlow.collectAsState(initial = ThemeMode.SYSTEM)
 
-    // 主题选择对话框状态
+    // 从 DataStore 读取归档设置
+    val autoArchiveEnabled by dataStoreManager.autoArchiveEnabledFlow.collectAsState(initial = true)
+    val archiveBoundaryHour by dataStoreManager.archiveBoundaryHourFlow.collectAsState(initial = 4)
+    val archiveBoundaryMinute by dataStoreManager.archiveBoundaryMinuteFlow.collectAsState(initial = 0)
+    val historyRetentionDays by dataStoreManager.historyRetentionDaysFlow.collectAsState(initial = 365)
+
+    // 对话框状态
     var showThemeDialog by remember { mutableStateOf(false) }
+    var showBoundaryTimeDialog by remember { mutableStateOf(false) }
+    var showRetentionDialog by remember { mutableStateOf(false) }
+    var showClearHistoryDialog by remember { mutableStateOf(false) }
 
     // 获取应用版本号
     val versionName = remember {
@@ -113,6 +129,53 @@ fun SettingsScreen(
                 )
             }
 
+            // 历史记录设置分组
+            SettingsGroup(title = "历史记录") {
+                // 自动归档开关
+                SettingsSwitchItem(
+                    title = "自动归档",
+                    description = "在分界点自动将事件记录归档到历史",
+                    checked = autoArchiveEnabled,
+                    onCheckedChange = { enabled ->
+                        coroutineScope.launch {
+                            dataStoreManager.saveAutoArchiveEnabled(enabled)
+                                .onFailure { e -> e.printStackTrace() }
+                        }
+                    }
+                )
+
+                HorizontalDivider()
+
+                // 归档分界点时间选择器
+                SettingsNavigationItem(
+                    title = "归档分界点",
+                    description = String.format(
+                        Locale.US,
+                        "%02d:%02d",
+                        archiveBoundaryHour,
+                        archiveBoundaryMinute
+                    ),
+                    onClick = { showBoundaryTimeDialog = true }
+                )
+
+                HorizontalDivider()
+
+                // 历史记录保留时长选择器
+                SettingsNavigationItem(
+                    title = "历史记录保留",
+                    description = if (historyRetentionDays < 0) "永久保留" else "${historyRetentionDays}天",
+                    onClick = { showRetentionDialog = true }
+                )
+
+                HorizontalDivider()
+
+                // 清空所有历史记录按钮
+                SettingsDangerItem(
+                    title = "清空所有历史记录",
+                    onClick = { showClearHistoryDialog = true }
+                )
+            }
+
             // 关于设置分组
             SettingsGroup(title = "关于") {
                 // 版本信息
@@ -135,6 +198,59 @@ fun SettingsScreen(
                         .onFailure { e -> e.printStackTrace() }
                 }
                 showThemeDialog = false
+            }
+        )
+    }
+
+    // 分界点时间选择器对话框
+    if (showBoundaryTimeDialog) {
+        BoundaryTimePickerDialog(
+            currentHour = archiveBoundaryHour,
+            currentMinute = archiveBoundaryMinute,
+            onDismiss = { showBoundaryTimeDialog = false },
+            onTimeSelected = { hour, minute ->
+                coroutineScope.launch {
+                    dataStoreManager.saveArchiveBoundaryHour(hour)
+                        .onFailure { e -> e.printStackTrace() }
+                    dataStoreManager.saveArchiveBoundaryMinute(minute)
+                        .onFailure { e -> e.printStackTrace() }
+                }
+                showBoundaryTimeDialog = false
+            }
+        )
+    }
+
+    // 保留时长选择器对话框
+    if (showRetentionDialog) {
+        RetentionDaysDialog(
+            currentDays = historyRetentionDays,
+            onDismiss = { showRetentionDialog = false },
+            onDaysSelected = { days ->
+                coroutineScope.launch {
+                    dataStoreManager.saveHistoryRetentionDays(days)
+                        .onFailure { e -> e.printStackTrace() }
+                }
+                showRetentionDialog = false
+            }
+        )
+    }
+
+    // 清空历史记录确认对话框
+    if (showClearHistoryDialog) {
+        ClearHistoryConfirmDialog(
+            onDismiss = { showClearHistoryDialog = false },
+            onConfirm = {
+                coroutineScope.launch {
+                    historyRepository.deleteAllSessions()
+                        .onSuccess {
+                            // 可以在这里显示 Toast 提示成功
+                        }
+                        .onFailure { e ->
+                            e.printStackTrace()
+                            // 可以在这里显示 Toast 提示失败
+                        }
+                }
+                showClearHistoryDialog = false
             }
         )
     }
@@ -275,6 +391,29 @@ fun SettingsInfoItem(
 }
 
 /**
+ * 危险操作设置项（红色文字）
+ */
+@Composable
+fun SettingsDangerItem(
+    title: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.error
+        )
+    }
+}
+
+/**
  * 主题选择对话框
  */
 @Composable
@@ -312,6 +451,186 @@ fun ThemeSelectionDialog(
             }
         },
         confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+/**
+ * 分界点时间选择器对话框
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BoundaryTimePickerDialog(
+    currentHour: Int,
+    currentMinute: Int,
+    onDismiss: () -> Unit,
+    onTimeSelected: (Int, Int) -> Unit
+) {
+    var selectedHour by remember { mutableIntStateOf(currentHour) }
+    var selectedMinute by remember { mutableIntStateOf(currentMinute) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(text = "选择归档时间点")
+        },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // 时间显示
+                Text(
+                    text = String.format(Locale.US, "%02d:%02d", selectedHour, selectedMinute),
+                    style = MaterialTheme.typography.displaySmall,
+                    modifier = Modifier.padding(vertical = 16.dp)
+                )
+
+                // 时间调整按钮
+                Row(
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    // 小时调整
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        IconButton(onClick = { selectedHour = (selectedHour + 1) % 24 }) {
+                            Icon(Icons.Default.KeyboardArrowUp, "增加小时")
+                        }
+                        Text("时", style = MaterialTheme.typography.labelLarge)
+                        IconButton(onClick = { selectedHour = (selectedHour - 1 + 24) % 24 }) {
+                            Icon(Icons.Default.KeyboardArrowDown, "减少小时")
+                        }
+                    }
+
+                    // 冒号分隔符
+                    Text(
+                        text = ":",
+                        style = MaterialTheme.typography.displaySmall,
+                        modifier = Modifier.padding(top = 24.dp)
+                    )
+
+                    // 分钟调整
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        IconButton(onClick = { selectedMinute = (selectedMinute + 15) % 60 }) {
+                            Icon(Icons.Default.KeyboardArrowUp, "增加分钟")
+                        }
+                        Text("分", style = MaterialTheme.typography.labelLarge)
+                        IconButton(onClick = { selectedMinute = (selectedMinute - 15 + 60) % 60 }) {
+                            Icon(Icons.Default.KeyboardArrowDown, "减少分钟")
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "推荐：凌晨 4:00（避免日常活动时间）",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onTimeSelected(selectedHour, selectedMinute) }) {
+                Text("确定")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+/**
+ * 历史记录保留时长选择器对话框
+ */
+@Composable
+fun RetentionDaysDialog(
+    currentDays: Int,
+    onDismiss: () -> Unit,
+    onDaysSelected: (Int) -> Unit
+) {
+    val options = listOf(
+        30 to "30 天\n节省存储空间",
+        90 to "90 天\n保留最近三个月",
+        180 to "180 天\n保留半年记录",
+        365 to "365 天（推荐）\n保留一年记录",
+        -1 to "永久保留\n不自动删除（需手动清理）"
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(text = "历史记录保留时长")
+        },
+        text = {
+            Column {
+                options.forEach { (days, description) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onDaysSelected(days) }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = days == currentDays,
+                            onClick = { onDaysSelected(days) }
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.2
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+/**
+ * 清空历史记录确认对话框
+ */
+@Composable
+fun ClearHistoryConfirmDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(text = "清空所有历史记录")
+        },
+        text = {
+            Text(
+                text = "此操作将删除所有已归档的历史记录，且无法恢复。确定要继续吗？",
+                style = MaterialTheme.typography.bodyMedium
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("确定删除")
+            }
+        },
+        dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("取消")
             }
