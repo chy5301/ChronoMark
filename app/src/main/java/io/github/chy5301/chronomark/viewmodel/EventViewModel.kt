@@ -1,8 +1,10 @@
 package io.github.chy5301.chronomark.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.chy5301.chronomark.data.DataStoreManager
+import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.EventUiState
 import io.github.chy5301.chronomark.data.model.TimeRecord
 import io.github.chy5301.chronomark.util.ShareHelper
@@ -21,8 +23,13 @@ import kotlinx.coroutines.launch
  * 事件模式 ViewModel
  */
 class EventViewModel(
-    private val dataStoreManager: DataStoreManager
+    private val dataStoreManager: DataStoreManager,
+    private val historyRepository: HistoryRepository
 ) : ViewModel() {
+
+    companion object {
+        private const val TAG = "EventViewModel"
+    }
 
     // UI 状态
     private val _uiState = MutableStateFlow(EventUiState())
@@ -151,6 +158,40 @@ class EventViewModel(
      */
     fun generateShareText(): String {
         return ShareHelper.generateEventShareText(_uiState.value.records)
+    }
+
+    /**
+     * 自动归档（跨天时触发）
+     * 将昨日的事件记录归档到历史数据库
+     */
+    suspend fun autoArchive() {
+        val records = _uiState.value.records
+        if (records.isEmpty()) {
+            Log.i(TAG, "No records to archive")
+            return
+        }
+
+        Log.i(TAG, "Starting auto archive for ${records.size} records")
+
+        // 1. 归档到 Room 数据库
+        historyRepository.archiveEventRecords(records)
+            .onSuccess {
+                Log.i(TAG, "Archive successful, clearing workspace")
+
+                // 2. 清空 DataStore 工作区
+                dataStoreManager.clearEventRecords()
+                    .onFailure { e ->
+                        Log.e(TAG, "Failed to clear workspace after archive", e)
+                    }
+
+                // 3. 更新 UI 状态
+                _uiState.update { it.copy(records = emptyList()) }
+
+                Log.i(TAG, "Auto archive completed: ${records.size} records archived")
+            }
+            .onFailure { e ->
+                Log.e(TAG, "Archive failed", e)
+            }
     }
 
     /**
