@@ -266,7 +266,28 @@ fun HistoryScreen(
                 title = { Text("历史记录") },
                 actions = {
                     // 分享按钮
-                    IconButton(onClick = { /* TODO: 实现分享功能 */ }) {
+                    IconButton(
+                        onClick = {
+                            val records = uiState.selectedSessionRecords
+
+                            if (records.isEmpty()) {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "暂无记录",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            } else {
+                                val shareText = viewModel.generateShareText()
+                                val sendIntent = android.content.Intent().apply {
+                                    action = android.content.Intent.ACTION_SEND
+                                    putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                                    type = "text/plain"
+                                }
+                                val shareIntent = android.content.Intent.createChooser(sendIntent, "分享记录")
+                                context.startActivity(shareIntent)
+                            }
+                        }
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Share,
                             contentDescription = "分享"

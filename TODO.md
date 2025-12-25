@@ -178,7 +178,7 @@
 
 ---
 
-## 🔄 Phase 8: 历史记录功能（进行中，约 85% 完成）
+## 🔄 Phase 8: 历史记录功能（进行中，约 95% 完成）
 
 详细技术要求见 [CLAUDE.md - Phase 8](./CLAUDE.md#phase-8-历史记录功能)
 
@@ -264,6 +264,37 @@
 **未完成**（可选优化）:
 - [ ] 日期/会话切换动画
 
+#### 6. 秒表手动归档 (100%)
+- [x] StopwatchViewModel 添加 HistoryRepository 依赖注入
+- [x] StopwatchViewModelFactory 支持 HistoryRepository 参数
+- [x] MainScreen 创建 StopwatchViewModel 时传入 HistoryRepository
+- [x] 实现 getDefaultTitle() 方法（生成默认标题"会话 HH:mm"）
+- [x] 实现 saveToHistory(title) 方法（归档到 Room 数据库）
+- [x] 停止后保存确认对话框（保存/不保存选项）
+- [x] 输入会话标题对话框（预填充默认标题，可编辑）
+
+**提交**: ✅ commit f8b4aec (秒表手动归档功能)
+
+#### 7. 分享与管理 (100%)
+
+**已完成**:
+- [x] 控制按钮确认对话框：
+  - [x] 删除当天记录确认对话框（事件模式）
+  - [x] 删除当前会话确认对话框（秒表模式）
+- [x] 编辑会话标题对话框（秒表模式）
+- [x] 编辑单条记录备注对话框（EditHistoryRecordDialog）
+- [x] 删除单条记录确认对话框
+- [x] 扩展 ShareHelper 支持历史会话分享：
+  - [x] generateHistoryShareText() 自动判断类型
+  - [x] generateHistoryStopwatchShareText() 秒表分享（含标题）
+  - [x] generateHistoryEventShareText() 事件分享
+- [x] HistoryViewModel 添加 generateShareText() 方法
+- [x] 历史记录页面分享功能实现（TopAppBar 分享按钮）
+- [x] 事件模式分享该天所有记录
+- [x] 秒表模式分享当前选中会话
+
+**提交**: ✅ commit [待标记] (历史记录分享功能)
+
 #### 8. 性能优化与测试 (40%)
 
 **已完成**:
@@ -274,28 +305,6 @@
 - [ ] 集成 Paging 3 分页加载（可选）
 - [ ] 测试大量数据场景（1000+ 条记录）
 - [ ] 测试归档操作的事务性（失败回滚）
-
-### 待开始 ❌
-
-#### 6. 秒表手动归档 (0%)
-- [ ] StopwatchViewModel 添加 HistoryRepository 依赖
-- [ ] 停止后"保存到历史"确认对话框
-- [ ] 输入会话标题对话框（预填充默认标题）
-- [ ] saveToHistory() 方法实现
-
-#### 7. 分享与管理 (70%)
-
-**已完成**:
-- [x] 控制按钮确认对话框：
-  - [x] 删除当天记录确认对话框（事件模式）
-  - [x] 删除当前会话确认对话框（秒表模式）
-- [x] 编辑会话标题对话框（秒表模式）
-- [x] 编辑单条记录备注对话框（EditHistoryRecordDialog）
-- [x] 删除单条记录确认对话框
-
-**未完成**:
-- [ ] 扩展 ShareHelper 支持历史会话分享
-- [ ] 历史记录页面分享功能实现（TopAppBar 分享按钮）
 
 #### 9. 边缘情况处理 (20%)
 
@@ -318,12 +327,13 @@
 - ~~编辑/删除单条记录对话框~~
 - ~~日历选择器对话框~~
 - ~~日历中标记有记录的日期（小圆点）~~
+- ~~秒表手动归档功能（停止后保存到历史）~~
+- ~~历史记录分享功能（扩展 ShareHelper）~~
 
 **剩余任务**：
 
 1. **高优先级（核心功能）**：
-   - 秒表手动归档功能（停止后保存到历史）
-   - 历史记录分享功能（扩展 ShareHelper）
+   - ✅ 全部完成！
 
 2. **中优先级（用户体验）**：
    - 日期/会话切换动画（可选）

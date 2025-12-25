@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.HistoryUiState
 import io.github.chy5301.chronomark.data.model.SessionType
+import io.github.chy5301.chronomark.util.ShareHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -197,6 +198,36 @@ class HistoryViewModel(
                 .onFailure { e ->
                     Log.e(TAG, "Failed to update record note", e)
                 }
+        }
+    }
+
+    /**
+     * 生成分享文本
+     * 事件模式：分享该天的所有事件记录
+     * 秒表模式：分享当前选中的会话
+     */
+    fun generateShareText(): String {
+        val currentState = _uiState.value
+        val sessions = currentState.sessions
+
+        if (sessions.isEmpty()) {
+            return when (currentState.currentMode) {
+                SessionType.EVENT -> "ChronoMark 事件记录\n\n暂无记录"
+                SessionType.STOPWATCH -> "ChronoMark 秒表记录\n\n暂无记录"
+            }
+        }
+
+        return when (currentState.currentMode) {
+            SessionType.EVENT -> {
+                // 事件模式：分享该天的所有记录（事件模式一天只有一个会话）
+                val session = sessions.first()
+                ShareHelper.generateHistoryShareText(session, currentState.selectedSessionRecords)
+            }
+            SessionType.STOPWATCH -> {
+                // 秒表模式：分享当前选中的会话
+                val currentSession = sessions[currentState.currentSessionIndex]
+                ShareHelper.generateHistoryShareText(currentSession, currentState.selectedSessionRecords)
+            }
         }
     }
 
