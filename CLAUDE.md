@@ -1944,6 +1944,178 @@ suspend fun saveToHistory(title: String) {
 
 ---
 
+#### Phase 9: 代码重构与架构优化 📋 规划中
+
+> **注意**: 这是基于当前代码（Phase 8 进行中）的初步重构方案。Phase 8 完成后需要重新评估和改进。
+
+**目标**: 提取共享组件，优化代码结构，提高可维护性和一致性。
+
+##### 背景与问题
+
+在 Phase 1-8 的快速迭代中，主界面和历史记录界面采用了不同的架构模式：
+
+**当前架构**:
+```
+主界面结构：
+├── MainScreen.kt (管理器 - 导航和模式切换)
+├── EventScreen.kt (事件模式内容)
+└── StopwatchScreen.kt (秒表模式内容)
+
+历史记录结构：
+└── HistoryScreen.kt (所有内容集中在一个文件)
+```
+
+**2x2 功能矩阵**:
+```
+                    主界面              历史记录界面
+事件模式     EventScreen          HistoryScreen(Event)
+秒表模式     StopwatchScreen      HistoryScreen(Stopwatch)
+```
+
+**问题分析**:
+1. **架构不一致**: 主界面拆分为 3 个文件，历史界面单文件
+2. **大量重复代码**: 约 200 行重复代码（~46% 可优化）
+   - NavigationBar: ~30 行重复（85% 相似度）
+   - 确认对话框: ~100 行重复（90% 相似度）
+   - RecordCard: ~150 行重复（70% 相似度）
+3. **相似度高但未复用**:
+   - 界面结构: ~85% 相似（TopAppBar + 内容区 + 底部导航）
+   - 切换逻辑: ~90% 相似（事件/秒表模式切换）
+   - 顶部按钮: ~70% 相似（分享、设置相同）
+
+##### 重构方案（初步）
+
+**设计原则**:
+1. **保持 Screen 文件完整性**: MainScreen 和 HistoryScreen 保持单文件模式，易于理解整体流程
+2. **提取真正可复用的组件**: 只提取重复度 > 60% 的组件，避免过度抽象
+3. **分层清晰**: Screen 层（页面管理） → Components 层（可复用组件） → ViewModel 层（业务逻辑）
+
+**新增目录结构**:
+```
+app/src/main/java/io/github/chy5301/chronomark/
+├── ui/
+│   ├── screen/                        # 页面层（保持不变）
+│   │   ├── MainScreen.kt
+│   │   ├── HistoryScreen.kt
+│   │   └── SettingsScreen.kt
+│   │
+│   └── components/                    # 共享组件层（新增）
+│       ├── navigation/
+│       │   └── ModeNavigationBar.kt   # 事件/秒表切换导航栏
+│       │
+│       ├── record/
+│       │   ├── RecordCard.kt          # 统一的记录卡片组件
+│       │   ├── RecordsList.kt         # 记录列表组件（可选）
+│       │   └── EmptyState.kt          # 空状态显示（可选）
+│       │
+│       └── dialog/
+│           ├── ConfirmDialog.kt       # 通用确认对话框
+│           ├── EditRecordDialog.kt    # 编辑记录对话框（移动）
+│           └── EditTitleDialog.kt     # 编辑标题对话框
+│
+├── viewmodel/                         # ViewModel 层（保持不变）
+├── data/                              # 数据层（保持不变）
+└── util/                              # 工具类（保持不变）
+```
+
+##### 核心任务（优先级排序）
+
+**1. 提取共享组件**（优先级：⭐⭐⭐⭐⭐）
+
+- [ ] **ModeNavigationBar.kt** - 事件/秒表切换导航栏
+  ```kotlin
+  @Composable
+  fun <T> ModeNavigationBar(
+      currentMode: T,
+      eventMode: T,
+      stopwatchMode: T,
+      onModeChange: (T) -> Unit,
+      modifier: Modifier = Modifier
+  )
+  ```
+  - 收益: 减少 ~30 行重复代码
+  - 使用场景: MainScreen + HistoryScreen
+
+- [ ] **ConfirmDialog.kt** - 通用确认对话框
+  ```kotlin
+  @Composable
+  fun ConfirmDialog(
+      show: Boolean,
+      title: String,
+      message: String,
+      confirmText: String = "确定",
+      dismissText: String = "取消",
+      onConfirm: () -> Unit,
+      onDismiss: () -> Unit,
+      isDangerous: Boolean = false  // 危险操作（红色按钮）
+  )
+  ```
+  - 收益: 减少 ~100 行重复代码
+  - 使用场景: 删除记录、重置、删除会话、清空历史等所有确认场景
+
+- [ ] **RecordCard.kt** - 统一记录卡片
+  ```kotlin
+  @Composable
+  fun RecordCard(
+      record: TimeRecord,
+      mode: RecordCardMode,
+      onClick: () -> Unit,
+      modifier: Modifier = Modifier
+  )
+
+  enum class RecordCardMode {
+      STOPWATCH,           // 秒表（累计+差值+时刻）
+      EVENT,               // 事件（序号+时刻）
+      HISTORY_STOPWATCH,   // 历史秒表（同 STOPWATCH）
+      HISTORY_EVENT        // 历史事件（同 EVENT）
+  }
+  ```
+  - 收益: 减少 ~150 行重复代码
+  - 使用场景: EventScreen + StopwatchScreen + HistoryScreen
+
+- [ ] **移动 EditRecordDialog** - 从 StopwatchScreen.kt 移动到 components/dialog/
+  - 已被复用，只需移动位置
+  - 统一对话框组件的存放位置
+
+**2. 重构现有 Screen**（优先级：⭐⭐⭐⭐）
+
+- [ ] MainScreen.kt - 使用 ModeNavigationBar 和 ConfirmDialog
+- [ ] HistoryScreen.kt - 使用 ModeNavigationBar、ConfirmDialog、RecordCard
+- [ ] EventScreen.kt - 使用 ConfirmDialog 和 RecordCard
+- [ ] StopwatchScreen.kt - 使用 ConfirmDialog 和 RecordCard
+
+**3. 可选优化**（优先级：⭐⭐）
+
+- [ ] 提取 RecordsList.kt - 记录列表组件
+- [ ] 提取 EmptyState.kt - 空状态显示组件
+- [ ] 考虑是否需要 CommonTopAppBar（评估后决定）
+
+##### 预期收益
+
+**代码减少量**:
+| 组件 | 当前行数 | 重构后行数 | 减少量 |
+|------|---------|-----------|--------|
+| ModeNavigationBar | 48 (24×2) | 30 | **-18 行** |
+| ConfirmDialog | 120 (30×4) | 40 | **-80 行** |
+| RecordCard | 200 (50×4) | 100 | **-100 行** |
+| EditRecordDialog | 65 | 65 | 0（移动）|
+| **总计** | **433 行** | **235 行** | **-198 行 (-46%)** |
+
+**架构改进**:
+- ✅ Screen 文件保持完整性和可读性
+- ✅ 组件层职责清晰，易于复用
+- ✅ 降低维护成本（修改一次，全局生效）
+- ✅ 统一 UI 样式，提高一致性
+- ✅ 更符合 Compose 最佳实践
+
+##### 实施时机
+
+- **启动时机**: Phase 8（历史记录功能）完成并测试稳定后
+- **重新评估**: Phase 8 完成时，基于实际代码重新分析重复模式，优化重构方案
+- **预计工作量**: 2-3 天
+
+---
+
 **📝 重要提醒**: 完成每个 Phase 后，请务必：
 1. 更新 CLAUDE.md 中对应 Phase 的完成状态（添加 ✅ 标记）
 2. 更新 TODO.md 中的进度追踪

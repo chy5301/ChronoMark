@@ -13,6 +13,7 @@
 - [x] Phase 6: 分享与复制功能
 - [x] Phase 7: 优化与完善
 - [ ] Phase 8: 历史记录功能（进行中，约 70% 完成）
+- [ ] Phase 9: 代码重构与架构优化（规划中）
 
 ---
 
@@ -318,6 +319,71 @@
 3. **低优先级（完善）**：
    - 边缘情况处理
    - 性能测试
+
+---
+
+## 📋 Phase 9: 代码重构与架构优化（规划中）
+
+> **注意**: 这是基于当前代码（Phase 8 进行中）的初步重构方案。Phase 8 完成后需要重新评估和改进。
+
+详细技术要求见 [CLAUDE.md - Phase 9](./CLAUDE.md#phase-9-代码重构与架构优化)
+
+### 背景
+
+- **问题**: 主界面和历史界面架构不一致，存在约 200 行重复代码（~46% 可优化）
+- **目标**: 提取共享组件，统一架构模式，提高可维护性
+- **时机**: Phase 8 完成后启动，Phase 8 完成时重新评估方案
+
+### 核心任务
+
+#### 1. 提取共享组件（优先级：⭐⭐⭐⭐⭐）
+
+- [ ] 创建 `ui/components/` 目录结构
+  - [ ] `navigation/ModeNavigationBar.kt` - 事件/秒表切换导航栏
+  - [ ] `dialog/ConfirmDialog.kt` - 通用确认对话框
+  - [ ] `record/RecordCard.kt` - 统一记录卡片组件
+  - [ ] 移动 `EditRecordDialog` 到 `dialog/` 目录
+
+#### 2. 重构现有 Screen（优先级：⭐⭐⭐⭐）
+
+- [ ] 重构 MainScreen.kt
+  - [ ] 使用 ModeNavigationBar 组件
+  - [ ] 使用 ConfirmDialog 组件（如适用）
+
+- [ ] 重构 HistoryScreen.kt
+  - [ ] 使用 ModeNavigationBar 组件
+  - [ ] 使用 ConfirmDialog 替换内联对话框
+  - [ ] 使用统一的 RecordCard 组件
+
+- [ ] 重构 EventScreen.kt
+  - [ ] 使用 ConfirmDialog 组件
+  - [ ] 使用统一的 RecordCard 组件
+
+- [ ] 重构 StopwatchScreen.kt
+  - [ ] 使用 ConfirmDialog 组件
+  - [ ] 使用统一的 RecordCard 组件
+
+#### 3. 可选优化（优先级：⭐⭐）
+
+- [ ] 评估是否需要 RecordsList 组件
+- [ ] 评估是否需要 EmptyState 组件
+- [ ] 评估是否需要 CommonTopAppBar 组件
+
+### 预期收益
+
+- **代码减少**: 约 200 行（-46%）
+- **架构改进**:
+  - ✅ 统一组件样式
+  - ✅ 降低维护成本
+  - ✅ 提高代码复用率
+  - ✅ 符合 Compose 最佳实践
+
+### 实施计划
+
+1. **Phase 8 完成后**: 重新评估代码，识别实际重复模式
+2. **更新重构方案**: 基于实际情况优化方案设计
+3. **逐步实施**: 按优先级依次实施（预计 2-3 天）
+4. **测试验证**: 确保重构不影响现有功能
 
 ---
 
