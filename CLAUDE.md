@@ -101,6 +101,11 @@ app/src/main/java/io/github/chy5301/chronomark/
 
 ## 常用命令
 
+> **注意**:
+> - 在 Bash 环境（Git Bash、WSL、Linux、macOS）中使用 `./gradlew`
+> - 在 Windows CMD 或 PowerShell 中使用 `gradlew.bat`
+> - **本项目开发环境所有命令示例使用 `./gradlew`**
+
 ### 构建和运行
 ```bash
 # 构建项目

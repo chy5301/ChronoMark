@@ -52,7 +52,7 @@ fun MainScreen() {
 
     // 创建两个 ViewModel（根据模式使用对应的）
     val stopwatchViewModel: StopwatchViewModel = viewModel(
-        factory = StopwatchViewModelFactory(dataStoreManager)
+        factory = StopwatchViewModelFactory(dataStoreManager, historyRepository)
     )
     val eventViewModel: EventViewModel = viewModel(
         factory = EventViewModelFactory(dataStoreManager, historyRepository)

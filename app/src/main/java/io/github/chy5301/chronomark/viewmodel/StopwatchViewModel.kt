@@ -1,8 +1,10 @@
 package io.github.chy5301.chronomark.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.chy5301.chronomark.data.DataStoreManager
+import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.StopwatchStatus
 import io.github.chy5301.chronomark.data.model.StopwatchUiState
 import io.github.chy5301.chronomark.data.model.TimeRecord
@@ -17,13 +19,21 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /**
  * 秒表 ViewModel
  */
 class StopwatchViewModel(
-    private val dataStoreManager: DataStoreManager
+    private val dataStoreManager: DataStoreManager,
+    private val historyRepository: HistoryRepository
 ) : ViewModel() {
+
+    companion object {
+        private const val TAG = "StopwatchViewModel"
+    }
 
     // UI 状态
     private val _uiState = MutableStateFlow(StopwatchUiState())
@@ -332,6 +342,60 @@ class StopwatchViewModel(
             }
             dataStoreManager.saveStopwatchElapsedTime(elapsedNanos)
                 .onFailure { e -> e.printStackTrace() }
+        }
+    }
+
+    /**
+     * 生成默认会话标题（基于开始时间）
+     */
+    fun getDefaultTitle(): String {
+        // 生成默认标题：基于开始时间 "会话 HH:mm"
+        val formatter = DateTimeFormatter.ofPattern("HH:mm")
+
+        // 从第一条记录获取开始时间，如果没有记录则使用当前时间
+        val startTime = if (_uiState.value.records.isNotEmpty()) {
+            _uiState.value.records.first().wallClockTime
+        } else {
+            System.currentTimeMillis()
+        }
+
+        val time = Instant.ofEpochMilli(startTime)
+            .atZone(ZoneId.systemDefault())
+            .format(formatter)
+        return "会话 $time"
+    }
+
+    /**
+     * 保存到历史记录
+     */
+    fun saveToHistory(title: String) {
+        viewModelScope.launch {
+            val records = _uiState.value.records
+            if (records.isEmpty()) {
+                Log.w(TAG, "No records to save")
+                return@launch
+            }
+
+            // 归档到 Room 数据库
+            historyRepository.archiveStopwatchRecords(
+                records = records,
+                title = title,
+                startTime = records.first().wallClockTime,
+                totalElapsedNanos = _uiState.value.currentTimeNanos
+            )
+                .onSuccess {
+                    Log.i(TAG, "Saved to history successfully")
+
+                    // 清空 DataStore 工作区
+                    dataStoreManager.clearStopwatchRecords()
+                        .onFailure { e -> Log.e(TAG, "Failed to clear records", e) }
+
+                    // 重置状态
+                    reset()
+                }
+                .onFailure { e ->
+                    Log.e(TAG, "Failed to save to history", e)
+                }
         }
     }
 

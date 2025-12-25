@@ -65,9 +65,87 @@ fun StopwatchScreen(
     val uiState by viewModel.uiState.collectAsState()
     var selectedRecord by remember { mutableStateOf<TimeRecord?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showSaveConfirm by remember { mutableStateOf(false) }
+    var showTitleInput by remember { mutableStateOf(false) }
 
     // 创建震动反馈辅助类
     val hapticFeedback = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+    // 当状态变为 Stopped 时，显示保存确认对话框
+    LaunchedEffect(uiState.status) {
+        if (uiState.status == StopwatchStatus.Stopped && uiState.records.isNotEmpty()) {
+            showSaveConfirm = true
+        }
+    }
+
+    // 保存确认对话框
+    if (showSaveConfirm) {
+        AlertDialog(
+            onDismissRequest = { /* 禁止点击外部关闭 */ },
+            title = { Text("保存到历史记录？") },
+            text = { Text("是否保存当前会话到历史记录？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showSaveConfirm = false
+                        showTitleInput = true
+                    }
+                ) {
+                    Text("保存")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showSaveConfirm = false
+                        viewModel.reset()
+                    }
+                ) {
+                    Text("不保存")
+                }
+            }
+        )
+    }
+
+    // 输入标题对话框
+    if (showTitleInput) {
+        var titleText by remember { mutableStateOf(viewModel.getDefaultTitle()) }
+
+        AlertDialog(
+            onDismissRequest = { /* 禁止点击外部关闭 */ },
+            title = { Text("输入会话标题") },
+            text = {
+                OutlinedTextField(
+                    value = titleText,
+                    onValueChange = { titleText = it },
+                    label = { Text("标题") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = { Text("会话 HH:mm") }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showTitleInput = false
+                        viewModel.saveToHistory(titleText)
+                    }
+                ) {
+                    Text("确定")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showTitleInput = false
+                        viewModel.reset()
+                    }
+                ) {
+                    Text("取消")
+                }
+            }
+        )
+    }
 
     // 编辑对话框
     selectedRecord?.let { record ->
