@@ -1,11 +1,13 @@
 package io.github.chy5301.chronomark.ui.screen
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -20,8 +22,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -70,6 +74,10 @@ fun HistoryScreen(
     var showSessionListDialog by remember { mutableStateOf(false) }
     var showDeleteEventConfirm by remember { mutableStateOf(false) }
     var showDeleteSessionConfirm by remember { mutableStateOf(false) }
+    var showEditTitleDialog by remember { mutableStateOf(false) }
+    var selectedRecord by remember { mutableStateOf<TimeRecordEntity?>(null) }
+    var showDeleteRecordConfirm by remember { mutableStateOf(false) }
+    var showCalendarDialog by remember { mutableStateOf(false) }
 
     // 拦截返回键
     BackHandler(onBack = onBackClick)
@@ -150,6 +158,108 @@ fun HistoryScreen(
         )
     }
 
+    // 编辑会话标题对话框（秒表模式）
+    if (showEditTitleDialog) {
+        val currentSession = uiState.sessions.getOrNull(uiState.currentSessionIndex)
+        var titleText by remember(currentSession?.id) {
+            mutableStateOf(currentSession?.title ?: "")
+        }
+
+        AlertDialog(
+            onDismissRequest = { showEditTitleDialog = false },
+            title = { Text("编辑会话标题") },
+            text = {
+                Column {
+                    Text(
+                        text = "为会话 ${uiState.currentSessionIndex + 1} 设置标题",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    OutlinedTextField(
+                        value = titleText,
+                        onValueChange = { titleText = it },
+                        label = { Text("标题") },
+                        placeholder = { Text("会话 ${uiState.currentSessionIndex + 1}") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.updateCurrentSessionTitle(titleText)
+                        showEditTitleDialog = false
+                    }
+                ) {
+                    Text("保存")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditTitleDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    // 编辑记录对话框
+    selectedRecord?.let { record ->
+        EditHistoryRecordDialog(
+            record = record,
+            onDismiss = { selectedRecord = null },
+            onSave = { note ->
+                viewModel.updateRecordNote(record.id, note)
+                selectedRecord = null
+            },
+            onDeleteRequest = { showDeleteRecordConfirm = true }
+        )
+    }
+
+    // 删除记录确认对话框
+    if (showDeleteRecordConfirm && selectedRecord != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteRecordConfirm = false },
+            title = { Text("确认删除") },
+            text = { Text("确定要删除记录 #${String.format(Locale.US, "%02d", selectedRecord!!.index)} 吗？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteRecord(selectedRecord!!.id)
+                        showDeleteRecordConfirm = false
+                        selectedRecord = null
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("删除")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteRecordConfirm = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    // 日历选择器对话框
+    if (showCalendarDialog) {
+        CalendarPickerDialog(
+            selectedDate = uiState.selectedDate,
+            datesWithRecords = uiState.datesWithRecords,
+            onDismiss = { showCalendarDialog = false },
+            onDateSelected = { date ->
+                viewModel.selectDate(date)
+                showCalendarDialog = false
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -209,7 +319,7 @@ fun HistoryScreen(
                 sessionCount = uiState.sessions.size,
                 onPreviousDay = { viewModel.goToPreviousDay() },
                 onNextDay = { viewModel.goToNextDay() },
-                onDateClick = { /* TODO: 打开日历选择器 */ },
+                onDateClick = { showCalendarDialog = true },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(160.dp)
@@ -239,7 +349,7 @@ fun HistoryScreen(
                             EventHistoryRecordsList(
                                 records = uiState.selectedSessionRecords,
                                 onRecordClick = { record ->
-                                    // TODO: 打开编辑记录对话框
+                                    selectedRecord = record
                                 },
                                 modifier = Modifier.fillMaxSize()
                             )
@@ -262,7 +372,7 @@ fun HistoryScreen(
                                 StopwatchHistoryRecordsList(
                                     records = uiState.selectedSessionRecords,
                                     onRecordClick = { record ->
-                                        // TODO: 打开编辑记录对话框
+                                        selectedRecord = record
                                     },
                                     modifier = Modifier.weight(1f)
                                 )
@@ -294,7 +404,7 @@ fun HistoryScreen(
                         // 秒表模式：编辑标题 + 删除会话按钮
                         StopwatchHistoryControlButtons(
                             onEditTitleClick = {
-                                // TODO: 打开编辑标题对话框
+                                showEditTitleDialog = true
                             },
                             onDeleteClick = {
                                 showDeleteSessionConfirm = true
@@ -339,7 +449,9 @@ fun DateSelectionSection(
             Text(
                 text = selectedDate.toString(),
                 style = MaterialTheme.typography.displaySmall,
-                modifier = Modifier.padding(horizontal = 16.dp)
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .clickable(onClick = onDateClick)
             )
 
             IconButton(onClick = onNextDay) {
@@ -764,4 +876,244 @@ fun SessionListDialog(
             }
         }
     )
+}
+
+/**
+ * 编辑历史记录对话框
+ */
+@Composable
+fun EditHistoryRecordDialog(
+    record: TimeRecordEntity,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit,
+    onDeleteRequest: () -> Unit
+) {
+    var noteText by remember(record.id) { mutableStateOf(record.note) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("编辑记录 #${String.format(Locale.US, "%02d", record.index)}")
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // 只读信息
+                Text(
+                    text = "累计时间: ${TimeFormatter.formatElapsed(record.elapsedTimeNanos)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "标记时刻: ${TimeFormatter.formatWallClock(record.wallClockTime)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 备注输入框
+                OutlinedTextField(
+                    value = noteText,
+                    onValueChange = { noteText = it },
+                    label = { Text("备注") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 3
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(noteText) }) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            Row {
+                // 删除按钮
+                TextButton(
+                    onClick = onDeleteRequest,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("删除")
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                // 取消按钮
+                TextButton(onClick = onDismiss) {
+                    Text("取消")
+                }
+            }
+        }
+    )
+}
+
+/**
+ * 日历选择器对话框
+ */
+@Composable
+fun CalendarPickerDialog(
+    selectedDate: java.time.LocalDate,
+    datesWithRecords: Set<java.time.LocalDate>,
+    onDismiss: () -> Unit,
+    onDateSelected: (java.time.LocalDate) -> Unit
+) {
+    var currentMonth by remember { mutableStateOf(selectedDate.withDayOfMonth(1)) }
+    var tempSelectedDate by remember { mutableStateOf(selectedDate) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择日期") },
+        text = {
+            Column {
+                // 月份选择器
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { currentMonth = currentMonth.minusMonths(1) }) {
+                        Text("<", style = MaterialTheme.typography.headlineSmall)
+                    }
+
+                    Text(
+                        text = "${currentMonth.year}年${currentMonth.monthValue}月",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    IconButton(onClick = { currentMonth = currentMonth.plusMonths(1) }) {
+                        Text(">", style = MaterialTheme.typography.headlineSmall)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 星期标题
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    listOf("日", "一", "二", "三", "四", "五", "六").forEach { day ->
+                        Text(
+                            text = day,
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 日历网格
+                CalendarGrid(
+                    currentMonth = currentMonth,
+                    selectedDate = tempSelectedDate,
+                    datesWithRecords = datesWithRecords,
+                    onDateClick = { tempSelectedDate = it }
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onDateSelected(tempSelectedDate) }) {
+                Text("确定")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+/**
+ * 日历网格组件
+ */
+@Composable
+fun CalendarGrid(
+    currentMonth: java.time.LocalDate,
+    selectedDate: java.time.LocalDate,
+    datesWithRecords: Set<java.time.LocalDate>,
+    onDateClick: (java.time.LocalDate) -> Unit
+) {
+    val firstDayOfMonth = currentMonth.withDayOfMonth(1)
+    val lastDayOfMonth = currentMonth.withDayOfMonth(currentMonth.lengthOfMonth())
+    val firstDayOfWeek = firstDayOfMonth.dayOfWeek.value % 7 // 0=周日, 1=周一, ..., 6=周六
+
+    Column {
+        var dayOfMonth = 1
+        val weeksNeeded = ((firstDayOfWeek + currentMonth.lengthOfMonth() + 6) / 7)
+
+        repeat(weeksNeeded) { week ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                repeat(7) { dayOfWeek ->
+                    val cellIndex = week * 7 + dayOfWeek
+                    val isInMonth = cellIndex >= firstDayOfWeek && dayOfMonth <= lastDayOfMonth.dayOfMonth
+
+                    if (isInMonth) {
+                        val date = currentMonth.withDayOfMonth(dayOfMonth)
+                        val isSelected = date == selectedDate
+                        val hasRecords = datesWithRecords.contains(date)
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .aspectRatio(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            TextButton(
+                                onClick = { onDateClick(date) },
+                                modifier = Modifier.fillMaxSize(),
+                                colors = ButtonDefaults.textButtonColors(
+                                    containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                    contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                )
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        text = dayOfMonth.toString(),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+
+                                    // 有记录的日期显示小圆点
+                                    if (hasRecords) {
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .size(4.dp)
+                                                .background(
+                                                    color = if (isSelected)
+                                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                                    else
+                                                        MaterialTheme.colorScheme.primary,
+                                                    shape = CircleShape
+                                                )
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        dayOfMonth++
+                    } else {
+                        // 空白占位
+                        Spacer(
+                            modifier = Modifier
+                                .weight(1f)
+                                .aspectRatio(1f)
+                        )
+                    }
+                }
+            }
+        }
+    }
 }

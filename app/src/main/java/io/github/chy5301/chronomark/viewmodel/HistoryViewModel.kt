@@ -29,8 +29,9 @@ class HistoryViewModel(
     val uiState: StateFlow<HistoryUiState> = _uiState.asStateFlow()
 
     init {
-        // 初始化：加载今天的会话列表
+        // 初始化：加载今天的会话列表和有记录的日期
         loadSessionsForDate(_uiState.value.selectedDate)
+        loadDatesWithRecords()
     }
 
     /**
@@ -39,6 +40,7 @@ class HistoryViewModel(
     fun switchMode(mode: SessionType) {
         _uiState.update { it.copy(currentMode = mode, currentSessionIndex = 0) }
         loadSessionsForDate(_uiState.value.selectedDate)
+        loadDatesWithRecords()
     }
 
     /**
@@ -246,6 +248,31 @@ class HistoryViewModel(
             historyRepository.getRecordsBySessionId(currentSession.id)
                 .collect { records ->
                     _uiState.update { it.copy(selectedSessionRecords = records) }
+                }
+        }
+    }
+
+    /**
+     * 加载有记录的日期列表（用于日历标记）
+     */
+    private fun loadDatesWithRecords() {
+        viewModelScope.launch {
+            val mode = _uiState.value.currentMode
+
+            // 使用 Flow 收集有记录的日期
+            historyRepository.getDatesWithRecords(mode)
+                .collect { dateStrings ->
+                    // 将字符串日期转换为 LocalDate 集合
+                    val dates = dateStrings.mapNotNull { dateString ->
+                        try {
+                            LocalDate.parse(dateString)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to parse date: $dateString", e)
+                            null
+                        }
+                    }.toSet()
+
+                    _uiState.update { it.copy(datesWithRecords = dates) }
                 }
         }
     }
