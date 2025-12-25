@@ -5,12 +5,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -61,8 +66,89 @@ fun HistoryScreen(
     // 收集 UI 状态
     val uiState by viewModel.uiState.collectAsState()
 
+    // 对话框状态
+    var showSessionListDialog by remember { mutableStateOf(false) }
+    var showDeleteEventConfirm by remember { mutableStateOf(false) }
+    var showDeleteSessionConfirm by remember { mutableStateOf(false) }
+
     // 拦截返回键
     BackHandler(onBack = onBackClick)
+
+    // 会话选择列表对话框
+    if (showSessionListDialog && uiState.currentMode == SessionType.STOPWATCH) {
+        SessionListDialog(
+            sessions = uiState.sessions,
+            currentIndex = uiState.currentSessionIndex,
+            onDismiss = { showSessionListDialog = false },
+            onSessionSelected = { index ->
+                viewModel.selectSession(index)
+                showSessionListDialog = false
+            }
+        )
+    }
+
+    // 删除当天记录确认对话框（事件模式）
+    if (showDeleteEventConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteEventConfirm = false },
+            title = { Text("确认删除") },
+            text = {
+                Text("确定要删除当前日期的所有事件记录吗？此操作无法撤销。")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteAllSessionsForCurrentDate()
+                        showDeleteEventConfirm = false
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("删除")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteEventConfirm = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    // 删除当前会话确认对话框（秒表模式）
+    if (showDeleteSessionConfirm) {
+        val currentSession = uiState.sessions.getOrNull(uiState.currentSessionIndex)
+        val sessionTitle = currentSession?.let {
+            it.title.ifEmpty { "会话 ${uiState.currentSessionIndex + 1}" }
+        } ?: ""
+
+        AlertDialog(
+            onDismissRequest = { showDeleteSessionConfirm = false },
+            title = { Text("确认删除") },
+            text = {
+                Text("确定要删除会话「$sessionTitle」的所有记录吗？此操作无法撤销。")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteCurrentSession()
+                        showDeleteSessionConfirm = false
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("删除")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteSessionConfirm = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -76,11 +162,11 @@ fun HistoryScreen(
                             contentDescription = "分享"
                         )
                     }
-                    // 关闭按钮
+                    // 返回主页按钮
                     IconButton(onClick = onBackClick) {
                         Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "关闭"
+                            imageVector = Icons.Default.Home,
+                            contentDescription = "返回主页"
                         )
                     }
                     // 设置按钮
@@ -99,17 +185,13 @@ fun HistoryScreen(
                 NavigationBarItem(
                     selected = uiState.currentMode == SessionType.EVENT,
                     onClick = { viewModel.switchMode(SessionType.EVENT) },
-                    icon = {
-                        Text("📋")
-                    },
+                    icon = { Icon(Icons.Filled.Event, contentDescription = "事件") },
                     label = { Text("事件") }
                 )
                 NavigationBarItem(
                     selected = uiState.currentMode == SessionType.STOPWATCH,
                     onClick = { viewModel.switchMode(SessionType.STOPWATCH) },
-                    icon = {
-                        Text("⏱️")
-                    },
+                    icon = { Icon(Icons.Filled.Timer, contentDescription = "秒表") },
                     label = { Text("秒表") }
                 )
             }
@@ -164,14 +246,27 @@ fun HistoryScreen(
                         }
 
                         SessionType.STOPWATCH -> {
-                            // 秒表模式：显示当前会话的记录
-                            StopwatchHistoryRecordsList(
-                                records = uiState.selectedSessionRecords,
-                                onRecordClick = { record ->
-                                    // TODO: 打开编辑记录对话框
-                                },
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            // 秒表模式：会话选择器 + 记录列表
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                // 会话选择器（80.dp）
+                                SessionSelector(
+                                    currentSession = uiState.sessions.getOrNull(uiState.currentSessionIndex),
+                                    currentIndex = uiState.currentSessionIndex,
+                                    totalSessions = uiState.sessions.size,
+                                    onPreviousClick = { viewModel.goToPreviousSession() },
+                                    onNextClick = { viewModel.goToNextSession() },
+                                    onTitleClick = { showSessionListDialog = true }
+                                )
+
+                                // 记录列表
+                                StopwatchHistoryRecordsList(
+                                    records = uiState.selectedSessionRecords,
+                                    onRecordClick = { record ->
+                                        // TODO: 打开编辑记录对话框
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
                 }
@@ -189,8 +284,7 @@ fun HistoryScreen(
                         // 事件模式：删除当天按钮
                         EventHistoryControlButtons(
                             onDeleteAllClick = {
-                                // TODO: 显示确认对话框
-                                viewModel.deleteAllSessionsForCurrentDate()
+                                showDeleteEventConfirm = true
                             },
                             modifier = Modifier.padding(top = 4.dp)
                         )
@@ -203,8 +297,7 @@ fun HistoryScreen(
                                 // TODO: 打开编辑标题对话框
                             },
                             onDeleteClick = {
-                                // TODO: 显示确认对话框
-                                viewModel.deleteCurrentSession()
+                                showDeleteSessionConfirm = true
                             },
                             modifier = Modifier.padding(top = 4.dp)
                         )
@@ -503,4 +596,172 @@ fun StopwatchHistoryControlButtons(
             )
         }
     }
+}
+
+/**
+ * 秒表模式会话选择器组件
+ */
+@Composable
+fun SessionSelector(
+    currentSession: io.github.chy5301.chronomark.data.database.entity.HistorySessionEntity?,
+    currentIndex: Int,
+    totalSessions: Int,
+    onPreviousClick: () -> Unit,
+    onNextClick: () -> Unit,
+    onTitleClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(80.dp)
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        if (currentSession != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 左箭头按钮
+                IconButton(
+                    onClick = onPreviousClick,
+                    enabled = currentIndex > 0
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "上一个会话"
+                    )
+                }
+
+                // 中间：会话标题 + 副标题
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(onClick = onTitleClick),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // 会话标题
+                    val title = if (currentSession.title.isNotEmpty()) {
+                        "${currentSession.title} (${currentIndex + 1}/$totalSessions)"
+                    } else {
+                        "会话 ${currentIndex + 1}/$totalSessions"
+                    }
+                    Text(
+                        text = title,
+                        fontSize = 40.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1
+                    )
+
+                    // 副标题：开始时间 + 总用时
+                    val startTime = TimeFormatter.formatWallClock(currentSession.startTime)
+                        .substring(0, 5)  // 只取 HH:mm 部分
+                    val totalTime = TimeFormatter.formatElapsed(currentSession.totalElapsedNanos)
+                        .let {
+                            // 去掉毫秒部分，只保留 MM:SS
+                            val parts = it.split(".")
+                            parts[0]
+                        }
+                    Text(
+                        text = "$startTime · 用时 $totalTime",
+                        fontSize = 20.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // 右箭头按钮
+                IconButton(
+                    onClick = onNextClick,
+                    enabled = currentIndex < totalSessions - 1
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "下一个会话"
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 会话选择列表对话框
+ */
+@Composable
+fun SessionListDialog(
+    sessions: List<io.github.chy5301.chronomark.data.database.entity.HistorySessionEntity>,
+    currentIndex: Int,
+    onDismiss: () -> Unit,
+    onSessionSelected: (Int) -> Unit
+) {
+    var selectedIndex by remember { mutableIntStateOf(currentIndex) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择会话") },
+        text = {
+            LazyColumn {
+                itemsIndexed(sessions) { index, session ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedIndex = index }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // 单选按钮
+                        RadioButton(
+                            selected = selectedIndex == index,
+                            onClick = { selectedIndex = index }
+                        )
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // 会话信息
+                        Column(modifier = Modifier.weight(1f)) {
+                            // 会话标题
+                            Text(
+                                text = session.title.ifEmpty {
+                                    "会话 ${index + 1}"
+                                },
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            // 开始时间 + 总用时
+                            val startTime = TimeFormatter.formatWallClock(session.startTime)
+                                .substring(0, 5)  // HH:mm
+                            val totalTime = TimeFormatter.formatElapsed(session.totalElapsedNanos)
+                                .split(".")[0]  // 去掉毫秒部分
+                            Text(
+                                text = "$startTime · 用时 $totalTime",
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    if (index < sessions.size - 1) {
+                        HorizontalDivider()
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSessionSelected(selectedIndex) }
+            ) {
+                Text("确定")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
 }
