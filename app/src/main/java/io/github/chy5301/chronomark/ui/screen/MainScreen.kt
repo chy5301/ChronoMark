@@ -2,6 +2,7 @@ package io.github.chy5301.chronomark.ui.screen
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Timer
@@ -59,10 +60,28 @@ fun MainScreen() {
 
     // 设置页面导航状态
     var showSettings by remember { mutableStateOf(false) }
+    // 历史记录页面导航状态
+    var showHistory by remember { mutableStateOf(false) }
 
     // 如果显示设置页面，直接返回设置界面
     if (showSettings) {
         SettingsScreen(onBackClick = { showSettings = false })
+        return
+    }
+
+    // 如果显示历史记录页面，直接返回历史界面
+    if (showHistory) {
+        HistoryScreen(
+            initialMode = when (currentMode) {
+                AppMode.STOPWATCH -> io.github.chy5301.chronomark.data.model.SessionType.STOPWATCH
+                AppMode.EVENT -> io.github.chy5301.chronomark.data.model.SessionType.EVENT
+            },
+            onBackClick = { showHistory = false },
+            onSettingsClick = {
+                showHistory = false
+                showSettings = true
+            }
+        )
         return
     }
 
@@ -116,6 +135,10 @@ fun MainScreen() {
                         }
                     ) {
                         Icon(Icons.Default.Share, contentDescription = "分享")
+                    }
+                    // 历史按钮
+                    IconButton(onClick = { showHistory = true }) {
+                        Icon(Icons.Default.History, contentDescription = "历史")
                     }
                     // 设置按钮
                     IconButton(onClick = { showSettings = true }) {

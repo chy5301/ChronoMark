@@ -1,9 +1,14 @@
 package io.github.chy5301.chronomark.ui.screen
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -11,13 +16,18 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.chy5301.chronomark.data.database.AppDatabase
+import io.github.chy5301.chronomark.data.database.entity.TimeRecordEntity
 import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.SessionType
+import io.github.chy5301.chronomark.util.TimeFormatter
 import io.github.chy5301.chronomark.viewmodel.HistoryViewModel
 import io.github.chy5301.chronomark.viewmodel.HistoryViewModelFactory
+import java.util.Locale
 
 /**
  * 历史记录页面
@@ -140,13 +150,30 @@ fun HistoryScreen(
                         modifier = Modifier.align(Alignment.Center)
                     )
                 } else {
-                    // TODO: 显示记录列表（事件模式 或 秒表模式）
-                    Text(
-                        text = "记录列表区域（待实现）",
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(16.dp)
-                    )
+                    // 根据模式显示记录列表
+                    when (uiState.currentMode) {
+                        SessionType.EVENT -> {
+                            // 事件模式：显示当天的所有记录
+                            EventHistoryRecordsList(
+                                records = uiState.selectedSessionRecords,
+                                onRecordClick = { record ->
+                                    // TODO: 打开编辑记录对话框
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+
+                        SessionType.STOPWATCH -> {
+                            // 秒表模式：显示当前会话的记录
+                            StopwatchHistoryRecordsList(
+                                records = uiState.selectedSessionRecords,
+                                onRecordClick = { record ->
+                                    // TODO: 打开编辑记录对话框
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
                 }
             }
 
@@ -157,11 +184,32 @@ fun HistoryScreen(
                     .height(96.dp),
                 contentAlignment = Alignment.TopCenter
             ) {
-                // TODO: 根据模式显示不同的控制按钮
-                Text(
-                    text = "控制按钮区域（待实现）",
-                    modifier = Modifier.padding(top = 4.dp)
-                )
+                when (uiState.currentMode) {
+                    SessionType.EVENT -> {
+                        // 事件模式：删除当天按钮
+                        EventHistoryControlButtons(
+                            onDeleteAllClick = {
+                                // TODO: 显示确认对话框
+                                viewModel.deleteAllSessionsForCurrentDate()
+                            },
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+
+                    SessionType.STOPWATCH -> {
+                        // 秒表模式：编辑标题 + 删除会话按钮
+                        StopwatchHistoryControlButtons(
+                            onEditTitleClick = {
+                                // TODO: 打开编辑标题对话框
+                            },
+                            onDeleteClick = {
+                                // TODO: 显示确认对话框
+                                viewModel.deleteCurrentSession()
+                            },
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
             }
         }
     }
@@ -253,5 +301,206 @@ fun EmptyHistoryState(
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+/**
+ * 事件模式历史记录列表
+ */
+@Composable
+fun EventHistoryRecordsList(
+    records: List<TimeRecordEntity>,
+    onRecordClick: (TimeRecordEntity) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(records) { record ->
+            HistoryRecordCard(
+                record = record,
+                onClick = { onRecordClick(record) }
+            )
+        }
+    }
+}
+
+/**
+ * 历史记录卡片组件（适用于事件和秒表模式）
+ */
+@Composable
+fun HistoryRecordCard(
+    record: TimeRecordEntity,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    showElapsedTime: Boolean = false  // 是否显示累计时间（秒表模式）
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            // 序号 + 标记时刻（或累计时间）
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = String.format(Locale.US, "%02d", record.index),
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                if (showElapsedTime) {
+                    // 秒表模式：显示累计时间
+                    Text(
+                        text = TimeFormatter.formatElapsed(record.elapsedTimeNanos),
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                } else {
+                    // 事件模式：显示标记时刻
+                    Text(
+                        text = TimeFormatter.formatWallClock(record.wallClockTime),
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            // 秒表模式的额外信息（时间差 + 标记时刻）
+            if (showElapsedTime) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = TimeFormatter.formatSplit(record.splitTimeNanos),
+                        fontSize = 20.sp,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                    Text(
+                        text = TimeFormatter.formatWallClock(record.wallClockTime),
+                        fontSize = 18.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // 备注（如果有）
+            if (record.note.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "📝 ${record.note}",
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 事件模式历史记录控制按钮
+ */
+@Composable
+fun EventHistoryControlButtons(
+    onDeleteAllClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    FilledIconButton(
+        onClick = onDeleteAllClick,
+        modifier = modifier.size(80.dp),
+        colors = IconButtonDefaults.filledIconButtonColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.error
+        )
+    ) {
+        Icon(
+            imageVector = Icons.Default.Delete,
+            contentDescription = "删除当天",
+            modifier = Modifier.size(32.dp)
+        )
+    }
+}
+
+/**
+ * 秒表模式历史记录列表
+ */
+@Composable
+fun StopwatchHistoryRecordsList(
+    records: List<TimeRecordEntity>,
+    onRecordClick: (TimeRecordEntity) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(records) { record ->
+            HistoryRecordCard(
+                record = record,
+                onClick = { onRecordClick(record) },
+                showElapsedTime = true  // 秒表模式显示累计时间
+            )
+        }
+    }
+}
+
+/**
+ * 秒表模式历史记录控制按钮
+ */
+@Composable
+fun StopwatchHistoryControlButtons(
+    onEditTitleClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // 编辑标题按钮
+        FilledIconButton(
+            onClick = onEditTitleClick,
+            modifier = Modifier.size(80.dp),
+            colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.primary
+            )
+        ) {
+            Icon(
+                imageVector = Icons.Default.Edit,
+                contentDescription = "编辑标题",
+                modifier = Modifier.size(32.dp)
+            )
+        }
+
+        // 删除会话按钮
+        FilledIconButton(
+            onClick = onDeleteClick,
+            modifier = Modifier.size(80.dp),
+            colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.error
+            )
+        ) {
+            Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = "删除会话",
+                modifier = Modifier.size(32.dp)
+            )
+        }
     }
 }
