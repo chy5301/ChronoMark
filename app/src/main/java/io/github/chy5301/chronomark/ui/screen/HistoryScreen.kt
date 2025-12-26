@@ -224,7 +224,17 @@ fun HistoryScreen(
         AlertDialog(
             onDismissRequest = { showDeleteRecordConfirm = false },
             title = { Text("确认删除") },
-            text = { Text("确定要删除记录 #${String.format(Locale.US, "%02d", selectedRecord!!.index)} 吗？") },
+            text = {
+                Text(
+                    "确定要删除记录 #${
+                        String.format(
+                            Locale.US,
+                            "%02d",
+                            selectedRecord!!.index
+                        )
+                    } 吗？"
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -283,7 +293,8 @@ fun HistoryScreen(
                                     putExtra(android.content.Intent.EXTRA_TEXT, shareText)
                                     type = "text/plain"
                                 }
-                                val shareIntent = android.content.Intent.createChooser(sendIntent, "分享记录")
+                                val shareIntent =
+                                    android.content.Intent.createChooser(sendIntent, "分享记录")
                                 context.startActivity(shareIntent)
                             }
                         }
@@ -1076,7 +1087,8 @@ fun CalendarGrid(
             ) {
                 repeat(7) { dayOfWeek ->
                     val cellIndex = week * 7 + dayOfWeek
-                    val isInMonth = cellIndex >= firstDayOfWeek && dayOfMonth <= lastDayOfMonth.dayOfMonth
+                    val isInMonth =
+                        cellIndex >= firstDayOfWeek && dayOfMonth <= lastDayOfMonth.dayOfMonth
 
                     if (isInMonth) {
                         val date = currentMonth.withDayOfMonth(dayOfMonth)

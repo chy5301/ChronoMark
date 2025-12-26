@@ -292,7 +292,7 @@ class HistoryRepository(
     suspend fun cleanupOldData(retentionDays: Int): Result<Unit> {
         return try {
             // 永久保留或无效值（防止整型溢出）
-            if (retentionDays < 0 || retentionDays > 36500) {
+            if (retentionDays !in 0..36500) {
                 return Result.success(Unit)
             }
 

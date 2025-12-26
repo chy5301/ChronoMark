@@ -24,7 +24,7 @@ ChronoMark 是一个基于 Jetpack Compose 的 Android 时间记录应用。**�
 
 ## 项目状态
 
-**当前阶段**: Phase 7 优化与完善进行中
+**当前阶段**: Phase 8 历史记录功能进行中（95% 完成）
 
 ### 已完成功能
 - ✅ 高精度计时（毫秒级，使用 nanoTime）
