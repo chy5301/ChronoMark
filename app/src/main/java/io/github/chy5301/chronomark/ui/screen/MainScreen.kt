@@ -78,9 +78,13 @@ fun MainScreen() {
             },
             onBackClick = { sessionType ->
                 // 根据历史记录的当前模式切换主界面模式
-                currentMode = when (sessionType) {
+                val targetMode = when (sessionType) {
                     io.github.chy5301.chronomark.data.model.SessionType.STOPWATCH -> AppMode.STOPWATCH
                     io.github.chy5301.chronomark.data.model.SessionType.EVENT -> AppMode.EVENT
+                }
+                coroutineScope.launch {
+                    dataStoreManager.saveCurrentMode(targetMode)
+                        .onFailure { e -> e.printStackTrace() }
                 }
                 showHistory = false
             },

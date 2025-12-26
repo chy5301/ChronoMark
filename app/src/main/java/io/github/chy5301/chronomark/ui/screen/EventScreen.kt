@@ -51,6 +51,7 @@ fun EventScreen(
     paddingValues: PaddingValues,
     vibrationEnabled: Boolean = true
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     var selectedRecord by remember { mutableStateOf<TimeRecord?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -161,7 +162,16 @@ fun EventScreen(
                 if (vibrationEnabled) {
                     hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                 }
-                showResetConfirm = true
+                // 检查是否有记录可重置
+                if (uiState.records.isEmpty()) {
+                    android.widget.Toast.makeText(
+                        context,
+                        "暂无记录",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    showResetConfirm = true
+                }
             },
             modifier = Modifier
                 .fillMaxWidth()

@@ -427,7 +427,16 @@ fun HistoryScreen(
                         // 事件模式：删除当天按钮
                         EventHistoryControlButtons(
                             onDeleteAllClick = {
-                                showDeleteEventConfirm = true
+                                // 检查是否有记录可删除
+                                if (uiState.selectedSessionRecords.isEmpty()) {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "暂无记录",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    showDeleteEventConfirm = true
+                                }
                             },
                             modifier = Modifier.padding(top = 4.dp)
                         )
@@ -437,10 +446,28 @@ fun HistoryScreen(
                         // 秒表模式：编辑标题 + 删除会话按钮
                         StopwatchHistoryControlButtons(
                             onEditTitleClick = {
-                                showEditTitleDialog = true
+                                // 检查是否有会话可编辑
+                                if (uiState.sessions.isEmpty()) {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "当天无会话记录",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    showEditTitleDialog = true
+                                }
                             },
                             onDeleteClick = {
-                                showDeleteSessionConfirm = true
+                                // 检查是否有记录可删除
+                                if (uiState.selectedSessionRecords.isEmpty()) {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "暂无记录",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    showDeleteSessionConfirm = true
+                                }
                             },
                             modifier = Modifier.padding(top = 4.dp)
                         )
@@ -1100,40 +1127,51 @@ fun CalendarGrid(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .aspectRatio(1f),
+                                .aspectRatio(1f)
+                                .padding(2.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            TextButton(
+                            Surface(
                                 onClick = { onDateClick(date) },
                                 modifier = Modifier.fillMaxSize(),
-                                colors = ButtonDefaults.textButtonColors(
-                                    containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                                    contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-                                )
+                                shape = CircleShape,
+                                color = if (isSelected)
+                                    MaterialTheme.colorScheme.primaryContainer
+                                else
+                                    Color.Transparent
                             ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        text = dayOfMonth.toString(),
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-
-                                    // 有记录的日期显示小圆点
-                                    if (hasRecords) {
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Box(
-                                            modifier = Modifier
-                                                .size(4.dp)
-                                                .background(
-                                                    color = if (isSelected)
-                                                        MaterialTheme.colorScheme.onPrimaryContainer
-                                                    else
-                                                        MaterialTheme.colorScheme.primary,
-                                                    shape = CircleShape
-                                                )
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Text(
+                                            text = dayOfMonth.toString(),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = if (isSelected)
+                                                MaterialTheme.colorScheme.onPrimaryContainer
+                                            else
+                                                MaterialTheme.colorScheme.onSurface
                                         )
+
+                                        // 有记录的日期显示小圆点
+                                        if (hasRecords) {
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(4.dp)
+                                                    .background(
+                                                        color = if (isSelected)
+                                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                                        else
+                                                            MaterialTheme.colorScheme.primary,
+                                                        shape = CircleShape
+                                                    )
+                                            )
+                                        }
                                     }
                                 }
                             }

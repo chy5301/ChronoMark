@@ -469,82 +469,65 @@ fun BoundaryTimePickerDialog(
     onDismiss: () -> Unit,
     onTimeSelected: (Int, Int) -> Unit
 ) {
-    var selectedHour by remember { mutableIntStateOf(currentHour) }
-    var selectedMinute by remember { mutableIntStateOf(currentMinute) }
+    val timePickerState = rememberTimePickerState(
+        initialHour = currentHour,
+        initialMinute = currentMinute,
+        is24Hour = true
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = {
-            Text(text = "选择归档时间点")
-        },
-        text = {
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Surface(
+            shape = MaterialTheme.shapes.extraLarge,
+            tonalElevation = 6.dp
+        ) {
             Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // 时间显示
                 Text(
-                    text = String.format(Locale.US, "%02d:%02d", selectedHour, selectedMinute),
-                    style = MaterialTheme.typography.displaySmall,
-                    modifier = Modifier.padding(vertical = 16.dp)
+                    text = "选择归档时间点",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
                 )
 
-                // 时间调整按钮
-                Row(
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    // 小时调整
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        IconButton(onClick = { selectedHour = (selectedHour + 1) % 24 }) {
-                            Icon(Icons.Default.KeyboardArrowUp, "增加小时")
-                        }
-                        Text("时", style = MaterialTheme.typography.labelLarge)
-                        IconButton(onClick = { selectedHour = (selectedHour - 1 + 24) % 24 }) {
-                            Icon(Icons.Default.KeyboardArrowDown, "减少小时")
-                        }
-                    }
-
-                    // 冒号分隔符
-                    Text(
-                        text = ":",
-                        style = MaterialTheme.typography.displaySmall,
-                        modifier = Modifier.padding(top = 24.dp)
-                    )
-
-                    // 分钟调整
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        IconButton(onClick = { selectedMinute = (selectedMinute + 15) % 60 }) {
-                            Icon(Icons.Default.KeyboardArrowUp, "增加分钟")
-                        }
-                        Text("分", style = MaterialTheme.typography.labelLarge)
-                        IconButton(onClick = { selectedMinute = (selectedMinute - 15 + 60) % 60 }) {
-                            Icon(Icons.Default.KeyboardArrowDown, "减少分钟")
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
+                // Material3 TimePicker（时间轮样式）
+                TimePicker(
+                    state = timePickerState,
+                    modifier = Modifier.padding(vertical = 16.dp)
+                )
 
                 Text(
                     text = "推荐：凌晨 4:00（避免日常活动时间）",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp)
+                    modifier = Modifier.padding(bottom = 16.dp)
                 )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onTimeSelected(selectedHour, selectedMinute) }) {
-                Text("确定")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("取消")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(
+                        onClick = {
+                            onTimeSelected(
+                                timePickerState.hour,
+                                timePickerState.minute
+                            )
+                        }
+                    ) {
+                        Text("确定")
+                    }
+                }
             }
         }
-    )
+    }
 }
 
 /**
