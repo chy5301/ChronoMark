@@ -76,7 +76,14 @@ fun MainScreen() {
                 AppMode.STOPWATCH -> io.github.chy5301.chronomark.data.model.SessionType.STOPWATCH
                 AppMode.EVENT -> io.github.chy5301.chronomark.data.model.SessionType.EVENT
             },
-            onBackClick = { showHistory = false },
+            onBackClick = { sessionType ->
+                // 根据历史记录的当前模式切换主界面模式
+                currentMode = when (sessionType) {
+                    io.github.chy5301.chronomark.data.model.SessionType.STOPWATCH -> AppMode.STOPWATCH
+                    io.github.chy5301.chronomark.data.model.SessionType.EVENT -> AppMode.EVENT
+                }
+                showHistory = false
+            },
             onSettingsClick = {
                 showHistory = false
                 showSettings = true

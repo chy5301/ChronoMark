@@ -346,23 +346,22 @@ class StopwatchViewModel(
     }
 
     /**
-     * 生成默认会话标题（基于开始时间）
+     * 生成默认会话标题（自动编号）
      */
-    fun getDefaultTitle(): String {
-        // 生成默认标题：基于开始时间 "会话 HH:mm"
-        val formatter = DateTimeFormatter.ofPattern("HH:mm")
+    suspend fun getDefaultTitle(): String {
+        // 获取今天的日期
+        val today = java.time.LocalDate.now().toString()
 
-        // 从第一条记录获取开始时间，如果没有记录则使用当前时间
-        val startTime = if (_uiState.value.records.isNotEmpty()) {
-            _uiState.value.records.first().wallClockTime
-        } else {
-            System.currentTimeMillis()
-        }
+        // 查询今天已有的秒表会话数量
+        val todaySessions = historyRepository.getSessionsByDate(
+            date = today,
+            sessionType = io.github.chy5301.chronomark.data.model.SessionType.STOPWATCH
+        ).first()
 
-        val time = Instant.ofEpochMilli(startTime)
-            .atZone(ZoneId.systemDefault())
-            .format(formatter)
-        return "会话 $time"
+        // 编号 = 今天的会话数 + 1
+        val number = todaySessions.size + 1
+
+        return "会话 $number"
     }
 
     /**

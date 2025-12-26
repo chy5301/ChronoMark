@@ -109,7 +109,12 @@ fun StopwatchScreen(
 
     // 输入标题对话框
     if (showTitleInput) {
-        var titleText by remember { mutableStateOf(viewModel.getDefaultTitle()) }
+        var titleText by remember { mutableStateOf("") }
+
+        // 异步获取默认标题
+        LaunchedEffect(Unit) {
+            titleText = viewModel.getDefaultTitle()
+        }
 
         AlertDialog(
             onDismissRequest = { /* 禁止点击外部关闭 */ },
@@ -121,7 +126,7 @@ fun StopwatchScreen(
                     label = { Text("标题") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    placeholder = { Text("会话 HH:mm") }
+                    placeholder = { Text("会话 1") }
                 )
             },
             confirmButton = {

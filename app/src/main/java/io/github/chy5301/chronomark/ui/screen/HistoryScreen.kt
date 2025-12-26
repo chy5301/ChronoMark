@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -42,14 +43,14 @@ import java.util.Locale
  * 历史记录页面
  *
  * @param initialMode 初始模式（从主页传递过来）
- * @param onBackClick 返回按钮点击事件
+ * @param onBackClick 返回按钮点击事件，传递当前模式
  * @param onSettingsClick 设置按钮点击事件
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(
     initialMode: SessionType = SessionType.EVENT,
-    onBackClick: () -> Unit,
+    onBackClick: (SessionType) -> Unit,
     onSettingsClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -79,8 +80,8 @@ fun HistoryScreen(
     var showDeleteRecordConfirm by remember { mutableStateOf(false) }
     var showCalendarDialog by remember { mutableStateOf(false) }
 
-    // 拦截返回键
-    BackHandler(onBack = onBackClick)
+    // 拦截返回键，返回时传递当前模式
+    BackHandler(onBack = { onBackClick(uiState.currentMode) })
 
     // 会话选择列表对话框
     if (showSessionListDialog && uiState.currentMode == SessionType.STOPWATCH) {
@@ -305,7 +306,7 @@ fun HistoryScreen(
                         )
                     }
                     // 返回主页按钮
-                    IconButton(onClick = onBackClick) {
+                    IconButton(onClick = { onBackClick(uiState.currentMode) }) {
                         Icon(
                             imageVector = Icons.Default.Home,
                             contentDescription = "返回主页"
@@ -342,9 +343,9 @@ fun HistoryScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = paddingValues.calculateTopPadding())
+                .padding(paddingValues)
         ) {
-            // 日期选择区（160.dp）
+            // 日期选择区（120.dp）
             DateSelectionSection(
                 selectedDate = uiState.selectedDate,
                 currentMode = uiState.currentMode,
@@ -354,7 +355,7 @@ fun HistoryScreen(
                 onDateClick = { showCalendarDialog = true },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(160.dp)
+                    .height(120.dp)
             )
 
             // 记录列表区（占据剩余空间）
@@ -464,14 +465,14 @@ fun DateSelectionSection(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier,
+        modifier = modifier.padding(horizontal = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         // 日期显示（大号字体 + 左右箭头）
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
+            horizontalArrangement = Arrangement.SpaceBetween,
             modifier = Modifier.fillMaxWidth()
         ) {
             IconButton(onClick = onPreviousDay) {
@@ -481,9 +482,7 @@ fun DateSelectionSection(
             Text(
                 text = selectedDate.toString(),
                 style = MaterialTheme.typography.displaySmall,
-                modifier = Modifier
-                    .padding(horizontal = 16.dp)
-                    .clickable(onClick = onDateClick)
+                modifier = Modifier.clickable(onClick = onDateClick)
             )
 
             IconButton(onClick = onNextDay) {
@@ -491,7 +490,7 @@ fun DateSelectionSection(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         // 副标题（星期 + 统计）
         val dayOfWeek = when (selectedDate.dayOfWeek.value) {
@@ -655,13 +654,15 @@ fun EventHistoryControlButtons(
     onDeleteAllClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    FilledIconButton(
+    ElevatedButton(
         onClick = onDeleteAllClick,
         modifier = modifier.size(80.dp),
-        colors = IconButtonDefaults.filledIconButtonColors(
+        shape = CircleShape,
+        colors = ButtonDefaults.elevatedButtonColors(
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.error
-        )
+        ),
+        elevation = ButtonDefaults.elevatedButtonElevation(defaultElevation = 4.dp)
     ) {
         Icon(
             imageVector = Icons.Default.Delete,
@@ -706,16 +707,18 @@ fun StopwatchHistoryControlButtons(
 ) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+        horizontalArrangement = Arrangement.spacedBy(80.dp)
     ) {
         // 编辑标题按钮
-        FilledIconButton(
+        ElevatedButton(
             onClick = onEditTitleClick,
             modifier = Modifier.size(80.dp),
-            colors = IconButtonDefaults.filledIconButtonColors(
+            shape = CircleShape,
+            colors = ButtonDefaults.elevatedButtonColors(
                 containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.primary
-            )
+            ),
+            elevation = ButtonDefaults.elevatedButtonElevation(defaultElevation = 4.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.Edit,
@@ -725,13 +728,15 @@ fun StopwatchHistoryControlButtons(
         }
 
         // 删除会话按钮
-        FilledIconButton(
+        ElevatedButton(
             onClick = onDeleteClick,
             modifier = Modifier.size(80.dp),
-            colors = IconButtonDefaults.filledIconButtonColors(
+            shape = CircleShape,
+            colors = ButtonDefaults.elevatedButtonColors(
                 containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.error
-            )
+            ),
+            elevation = ButtonDefaults.elevatedButtonElevation(defaultElevation = 4.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.Delete,
@@ -758,8 +763,8 @@ fun SessionSelector(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(80.dp)
-            .padding(horizontal = 16.dp),
+            .height(64.dp)
+            .padding(horizontal = 32.dp),
         contentAlignment = Alignment.Center
     ) {
         if (currentSession != null) {
@@ -773,18 +778,17 @@ fun SessionSelector(
                     onClick = onPreviousClick,
                     enabled = currentIndex > 0
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "上一个会话"
-                    )
+                    Text("<", style = MaterialTheme.typography.headlineLarge)
                 }
 
                 // 中间：会话标题 + 副标题
                 Column(
                     modifier = Modifier
-                        .weight(1f)
+                        .weight(1f, fill = false)
+                        .widthIn(max = 240.dp)
                         .clickable(onClick = onTitleClick),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     // 会话标题
                     val title = if (currentSession.title.isNotEmpty()) {
@@ -794,10 +798,11 @@ fun SessionSelector(
                     }
                     Text(
                         text = title,
-                        fontSize = 40.sp,
+                        fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
 
                     // 副标题：开始时间 + 总用时
@@ -811,7 +816,7 @@ fun SessionSelector(
                         }
                     Text(
                         text = "$startTime · 用时 $totalTime",
-                        fontSize = 20.sp,
+                        fontSize = 16.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -821,10 +826,7 @@ fun SessionSelector(
                     onClick = onNextClick,
                     enabled = currentIndex < totalSessions - 1
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = "下一个会话"
-                    )
+                    Text(">", style = MaterialTheme.typography.headlineLarge)
                 }
             }
         }
