@@ -27,6 +27,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import io.github.chy5301.chronomark.ui.components.dialog.ConfirmDialog
+import io.github.chy5301.chronomark.ui.components.dialog.EditRecordDialog
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.Icon
@@ -516,73 +517,3 @@ fun ControlButton(
     }
 }
 
-/**
- * 编辑记录对话框
- */
-@Composable
-fun EditRecordDialog(
-    record: TimeRecord,
-    onDismiss: () -> Unit,
-    onSave: (String) -> Unit,
-    onDeleteRequest: () -> Unit
-) {
-    var noteText by remember(record.id) { mutableStateOf(record.note) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text("编辑记录 #${"%02d".format(record.index)}")
-        },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // 只读信息
-                Text(
-                    text = "累计时间: ${TimeFormatter.formatElapsed(record.elapsedTimeNanos)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "标记时刻: ${TimeFormatter.formatWallClock(record.wallClockTime)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // 备注输入框
-                OutlinedTextField(
-                    value = noteText,
-                    onValueChange = { noteText = it },
-                    label = { Text("备注") },
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 3
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onSave(noteText) }) {
-                Text("保存")
-            }
-        },
-        dismissButton = {
-            Row {
-                // 删除按钮
-                TextButton(
-                    onClick = onDeleteRequest,
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text("删除")
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                // 取消按钮
-                TextButton(onClick = onDismiss) {
-                    Text("取消")
-                }
-            }
-        }
-    )
-}

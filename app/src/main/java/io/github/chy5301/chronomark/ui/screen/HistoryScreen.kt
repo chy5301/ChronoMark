@@ -33,6 +33,7 @@ import io.github.chy5301.chronomark.data.database.entity.TimeRecordEntity
 import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.AppMode
 import io.github.chy5301.chronomark.ui.components.dialog.ConfirmDialog
+import io.github.chy5301.chronomark.ui.components.dialog.EditRecordDialog
 import io.github.chy5301.chronomark.ui.components.navigation.ModeNavigationBar
 import io.github.chy5301.chronomark.util.TimeFormatter
 import io.github.chy5301.chronomark.viewmodel.HistoryViewModel
@@ -180,7 +181,7 @@ fun HistoryScreen(
 
     // 编辑记录对话框
     selectedRecord?.let { record ->
-        EditHistoryRecordDialog(
+        EditRecordDialog(
             record = record,
             onDismiss = { selectedRecord = null },
             onSave = { note ->
@@ -879,76 +880,6 @@ fun SessionListDialog(
     )
 }
 
-/**
- * 编辑历史记录对话框
- */
-@Composable
-fun EditHistoryRecordDialog(
-    record: TimeRecordEntity,
-    onDismiss: () -> Unit,
-    onSave: (String) -> Unit,
-    onDeleteRequest: () -> Unit
-) {
-    var noteText by remember(record.id) { mutableStateOf(record.note) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text("编辑记录 #${String.format(Locale.US, "%02d", record.index)}")
-        },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // 只读信息
-                Text(
-                    text = "累计时间: ${TimeFormatter.formatElapsed(record.elapsedTimeNanos)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "标记时刻: ${TimeFormatter.formatWallClock(record.wallClockTime)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // 备注输入框
-                OutlinedTextField(
-                    value = noteText,
-                    onValueChange = { noteText = it },
-                    label = { Text("备注") },
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 3
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onSave(noteText) }) {
-                Text("保存")
-            }
-        },
-        dismissButton = {
-            Row {
-                // 删除按钮
-                TextButton(
-                    onClick = onDeleteRequest,
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text("删除")
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                // 取消按钮
-                TextButton(onClick = onDismiss) {
-                    Text("取消")
-                }
-            }
-        }
-    )
-}
 
 /**
  * 日历选择器对话框

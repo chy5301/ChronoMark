@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.chy5301.chronomark.data.model.TimeRecord
 import io.github.chy5301.chronomark.ui.components.dialog.ConfirmDialog
+import io.github.chy5301.chronomark.ui.components.dialog.EditRecordDialog
 import io.github.chy5301.chronomark.ui.theme.TabularNumbersStyle
 import io.github.chy5301.chronomark.util.TimeFormatter
 import io.github.chy5301.chronomark.viewmodel.EventViewModel
