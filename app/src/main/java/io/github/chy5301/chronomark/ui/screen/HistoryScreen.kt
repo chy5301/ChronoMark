@@ -32,6 +32,7 @@ import io.github.chy5301.chronomark.data.database.AppDatabase
 import io.github.chy5301.chronomark.data.database.entity.TimeRecordEntity
 import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.AppMode
+import io.github.chy5301.chronomark.ui.components.dialog.ConfirmDialog
 import io.github.chy5301.chronomark.ui.components.navigation.ModeNavigationBar
 import io.github.chy5301.chronomark.util.TimeFormatter
 import io.github.chy5301.chronomark.viewmodel.HistoryViewModel
@@ -96,67 +97,38 @@ fun HistoryScreen(
     }
 
     // 删除当天记录确认对话框（事件模式）
-    if (showDeleteEventConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteEventConfirm = false },
-            title = { Text("确认删除") },
-            text = {
-                Text("确定要删除当前日期的所有事件记录吗？此操作无法撤销。")
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.deleteAllSessionsForCurrentDate()
-                        showDeleteEventConfirm = false
-                    },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text("删除")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteEventConfirm = false }) {
-                    Text("取消")
-                }
-            }
-        )
-    }
+    ConfirmDialog(
+        show = showDeleteEventConfirm,
+        title = "确认删除",
+        message = "确定要删除当前日期的所有事件记录吗？此操作无法撤销。",
+        confirmText = "删除",
+        isDangerous = true,
+        onConfirm = {
+            viewModel.deleteAllSessionsForCurrentDate()
+            showDeleteEventConfirm = false
+        },
+        onDismiss = { showDeleteEventConfirm = false }
+    )
 
     // 删除当前会话确认对话框（秒表模式）
-    if (showDeleteSessionConfirm) {
-        val currentSession = uiState.sessions.getOrNull(uiState.currentSessionIndex)
-        val sessionTitle = currentSession?.let {
-            it.title.ifEmpty { "会话 ${uiState.currentSessionIndex + 1}" }
-        } ?: ""
-
-        AlertDialog(
-            onDismissRequest = { showDeleteSessionConfirm = false },
-            title = { Text("确认删除") },
-            text = {
-                Text("确定要删除会话「$sessionTitle」的所有记录吗？此操作无法撤销。")
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.deleteCurrentSession()
-                        showDeleteSessionConfirm = false
-                    },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text("删除")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteSessionConfirm = false }) {
-                    Text("取消")
-                }
-            }
-        )
-    }
+    ConfirmDialog(
+        show = showDeleteSessionConfirm,
+        title = "确认删除",
+        message = run {
+            val currentSession = uiState.sessions.getOrNull(uiState.currentSessionIndex)
+            val sessionTitle = currentSession?.let {
+                it.title.ifEmpty { "会话 ${uiState.currentSessionIndex + 1}" }
+            } ?: ""
+            "确定要删除会话「$sessionTitle」的所有记录吗？此操作无法撤销。"
+        },
+        confirmText = "删除",
+        isDangerous = true,
+        onConfirm = {
+            viewModel.deleteCurrentSession()
+            showDeleteSessionConfirm = false
+        },
+        onDismiss = { showDeleteSessionConfirm = false }
+    )
 
     // 编辑会话标题对话框（秒表模式）
     if (showEditTitleDialog) {
@@ -220,42 +192,21 @@ fun HistoryScreen(
     }
 
     // 删除记录确认对话框
-    if (showDeleteRecordConfirm && selectedRecord != null) {
-        AlertDialog(
-            onDismissRequest = { showDeleteRecordConfirm = false },
-            title = { Text("确认删除") },
-            text = {
-                Text(
-                    "确定要删除记录 #${
-                        String.format(
-                            Locale.US,
-                            "%02d",
-                            selectedRecord!!.index
-                        )
-                    } 吗？"
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.deleteRecord(selectedRecord!!.id)
-                        showDeleteRecordConfirm = false
-                        selectedRecord = null
-                    },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text("删除")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteRecordConfirm = false }) {
-                    Text("取消")
-                }
+    ConfirmDialog(
+        show = showDeleteRecordConfirm && selectedRecord != null,
+        title = "确认删除",
+        message = "确定要删除记录 #${if (selectedRecord != null) String.format(Locale.US, "%02d", selectedRecord!!.index) else ""} 吗？",
+        confirmText = "删除",
+        isDangerous = true,
+        onConfirm = {
+            selectedRecord?.let { record ->
+                viewModel.deleteRecord(record.id)
             }
-        )
-    }
+            showDeleteRecordConfirm = false
+            selectedRecord = null
+        },
+        onDismiss = { showDeleteRecordConfirm = false }
+    )
 
     // 日历选择器对话框
     if (showCalendarDialog) {

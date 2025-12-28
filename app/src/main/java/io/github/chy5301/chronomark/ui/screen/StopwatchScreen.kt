@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import io.github.chy5301.chronomark.ui.components.dialog.ConfirmDialog
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.Icon
@@ -166,32 +167,21 @@ fun StopwatchScreen(
     }
 
     // 删除确认对话框
-    if (showDeleteConfirm && selectedRecord != null) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("确认删除") },
-            text = { Text("确定要删除记录 #${"%02d".format(selectedRecord!!.index)} 吗？") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.deleteRecord(selectedRecord!!.id)
-                        showDeleteConfirm = false
-                        selectedRecord = null
-                    },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text("删除")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("取消")
-                }
+    ConfirmDialog(
+        show = showDeleteConfirm && selectedRecord != null,
+        title = "确认删除",
+        message = "确定要删除记录 #${if (selectedRecord != null) "%02d".format(selectedRecord!!.index) else ""} 吗？",
+        confirmText = "删除",
+        isDangerous = true,
+        onConfirm = {
+            selectedRecord?.let { record ->
+                viewModel.deleteRecord(record.id)
             }
-        )
-    }
+            showDeleteConfirm = false
+            selectedRecord = null
+        },
+        onDismiss = { showDeleteConfirm = false }
+    )
 
     Column(
         modifier = Modifier
