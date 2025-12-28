@@ -31,7 +31,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.chy5301.chronomark.data.database.AppDatabase
 import io.github.chy5301.chronomark.data.database.entity.TimeRecordEntity
 import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
-import io.github.chy5301.chronomark.data.model.SessionType
+import io.github.chy5301.chronomark.data.model.AppMode
 import io.github.chy5301.chronomark.ui.components.navigation.ModeNavigationBar
 import io.github.chy5301.chronomark.util.TimeFormatter
 import io.github.chy5301.chronomark.viewmodel.HistoryViewModel
@@ -48,8 +48,8 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(
-    initialMode: SessionType = SessionType.EVENT,
-    onBackClick: (SessionType) -> Unit,
+    initialMode: AppMode = AppMode.EVENT,
+    onBackClick: (AppMode) -> Unit,
     onSettingsClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -83,7 +83,7 @@ fun HistoryScreen(
     BackHandler(onBack = { onBackClick(uiState.currentMode) })
 
     // 会话选择列表对话框
-    if (showSessionListDialog && uiState.currentMode == SessionType.STOPWATCH) {
+    if (showSessionListDialog && uiState.currentMode == AppMode.STOPWATCH) {
         SessionListDialog(
             sessions = uiState.sessions,
             currentIndex = uiState.currentSessionIndex,
@@ -325,8 +325,6 @@ fun HistoryScreen(
             // 底部导航栏（事件/秒表切换）
             ModeNavigationBar(
                 currentMode = uiState.currentMode,
-                eventMode = SessionType.EVENT,
-                stopwatchMode = SessionType.STOPWATCH,
                 onModeChange = { mode -> viewModel.switchMode(mode) }
             )
         }
@@ -368,7 +366,7 @@ fun HistoryScreen(
                 } else {
                     // 根据模式显示记录列表
                     when (uiState.currentMode) {
-                        SessionType.EVENT -> {
+                        AppMode.EVENT -> {
                             // 事件模式：显示当天的所有记录
                             EventHistoryRecordsList(
                                 records = uiState.selectedSessionRecords,
@@ -379,7 +377,7 @@ fun HistoryScreen(
                             )
                         }
 
-                        SessionType.STOPWATCH -> {
+                        AppMode.STOPWATCH -> {
                             // 秒表模式：会话选择器 + 记录列表
                             Column(modifier = Modifier.fillMaxSize()) {
                                 // 会话选择器（80.dp）
@@ -414,7 +412,7 @@ fun HistoryScreen(
                 contentAlignment = Alignment.TopCenter
             ) {
                 when (uiState.currentMode) {
-                    SessionType.EVENT -> {
+                    AppMode.EVENT -> {
                         // 事件模式：删除当天按钮
                         EventHistoryControlButtons(
                             onDeleteAllClick = {
@@ -433,7 +431,7 @@ fun HistoryScreen(
                         )
                     }
 
-                    SessionType.STOPWATCH -> {
+                    AppMode.STOPWATCH -> {
                         // 秒表模式：编辑标题 + 删除会话按钮
                         StopwatchHistoryControlButtons(
                             onEditTitleClick = {
@@ -475,7 +473,7 @@ fun HistoryScreen(
 @Composable
 fun DateSelectionSection(
     selectedDate: java.time.LocalDate,
-    currentMode: SessionType,
+    currentMode: AppMode,
     sessionCount: Int,
     onPreviousDay: () -> Unit,
     onNextDay: () -> Unit,
@@ -523,8 +521,8 @@ fun DateSelectionSection(
         }
 
         val subtitle = when (currentMode) {
-            SessionType.EVENT -> "$dayOfWeek · 共${sessionCount}条"
-            SessionType.STOPWATCH -> "$dayOfWeek · ${sessionCount}个会话"
+            AppMode.EVENT -> "$dayOfWeek · 共${sessionCount}条"
+            AppMode.STOPWATCH -> "$dayOfWeek · ${sessionCount}个会话"
         }
 
         Text(
@@ -540,7 +538,7 @@ fun DateSelectionSection(
  */
 @Composable
 fun EmptyHistoryState(
-    currentMode: SessionType,
+    currentMode: AppMode,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -549,8 +547,8 @@ fun EmptyHistoryState(
     ) {
         Text(
             text = when (currentMode) {
-                SessionType.EVENT -> "该日期暂无事件记录"
-                SessionType.STOPWATCH -> "该日期暂无秒表记录"
+                AppMode.EVENT -> "该日期暂无事件记录"
+                AppMode.STOPWATCH -> "该日期暂无秒表记录"
             },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant

@@ -8,7 +8,7 @@ import java.time.LocalDate
  * 历史记录页面 UI 状态
  */
 data class HistoryUiState(
-    val currentMode: SessionType = SessionType.EVENT,  // 当前选中模式（事件/秒表）
+    val currentMode: AppMode = AppMode.EVENT,  // 当前选中模式（事件/秒表）
     val selectedDate: LocalDate = LocalDate.now(),     // 当前选中日期
     val sessions: List<HistorySessionEntity> = emptyList(),  // 当前选中日期的会话列表
     val selectedSessionRecords: List<TimeRecordEntity> = emptyList(),  // 当前会话的记录

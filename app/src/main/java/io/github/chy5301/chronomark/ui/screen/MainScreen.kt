@@ -69,18 +69,11 @@ fun MainScreen() {
     // 如果显示历史记录页面，直接返回历史界面
     if (showHistory) {
         HistoryScreen(
-            initialMode = when (currentMode) {
-                AppMode.STOPWATCH -> io.github.chy5301.chronomark.data.model.SessionType.STOPWATCH
-                AppMode.EVENT -> io.github.chy5301.chronomark.data.model.SessionType.EVENT
-            },
-            onBackClick = { sessionType ->
+            initialMode = currentMode,
+            onBackClick = { appMode ->
                 // 根据历史记录的当前模式切换主界面模式
-                val targetMode = when (sessionType) {
-                    io.github.chy5301.chronomark.data.model.SessionType.STOPWATCH -> AppMode.STOPWATCH
-                    io.github.chy5301.chronomark.data.model.SessionType.EVENT -> AppMode.EVENT
-                }
                 coroutineScope.launch {
-                    dataStoreManager.saveCurrentMode(targetMode)
+                    dataStoreManager.saveCurrentMode(appMode)
                         .onFailure { e -> e.printStackTrace() }
                 }
                 showHistory = false
@@ -158,8 +151,6 @@ fun MainScreen() {
         bottomBar = {
             ModeNavigationBar(
                 currentMode = currentMode,
-                eventMode = AppMode.EVENT,
-                stopwatchMode = AppMode.STOPWATCH,
                 onModeChange = { mode ->
                     coroutineScope.launch {
                         dataStoreManager.saveCurrentMode(mode)

@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
+import io.github.chy5301.chronomark.data.model.AppMode
 import io.github.chy5301.chronomark.data.model.HistoryUiState
 import io.github.chy5301.chronomark.data.model.SessionType
 import io.github.chy5301.chronomark.util.ShareHelper
@@ -23,6 +24,16 @@ class HistoryViewModel(
 
     companion object {
         private const val TAG = "HistoryViewModel"
+
+        /**
+         * UI 层 AppMode → 数据层 SessionType 转换
+         */
+        private fun AppMode.toSessionType(): SessionType {
+            return when (this) {
+                AppMode.EVENT -> SessionType.EVENT
+                AppMode.STOPWATCH -> SessionType.STOPWATCH
+            }
+        }
     }
 
     // UI 状态
@@ -38,7 +49,7 @@ class HistoryViewModel(
     /**
      * 切换模式（事件/秒表）
      */
-    fun switchMode(mode: SessionType) {
+    fun switchMode(mode: AppMode) {
         _uiState.update { it.copy(currentMode = mode, currentSessionIndex = 0) }
         loadSessionsForDate(_uiState.value.selectedDate)
         loadDatesWithRecords()
@@ -110,7 +121,7 @@ class HistoryViewModel(
     fun deleteAllSessionsForCurrentDate() {
         viewModelScope.launch {
             val date = _uiState.value.selectedDate.toString()
-            val mode = _uiState.value.currentMode
+            val mode = _uiState.value.currentMode.toSessionType()
 
             historyRepository.deleteSessionsByDateAndType(date, mode)
                 .onSuccess {
@@ -212,18 +223,18 @@ class HistoryViewModel(
 
         if (sessions.isEmpty()) {
             return when (currentState.currentMode) {
-                SessionType.EVENT -> "ChronoMark 事件记录\n\n暂无记录"
-                SessionType.STOPWATCH -> "ChronoMark 秒表记录\n\n暂无记录"
+                AppMode.EVENT -> "ChronoMark 事件记录\n\n暂无记录"
+                AppMode.STOPWATCH -> "ChronoMark 秒表记录\n\n暂无记录"
             }
         }
 
         return when (currentState.currentMode) {
-            SessionType.EVENT -> {
+            AppMode.EVENT -> {
                 // 事件模式：分享该天的所有记录（事件模式一天只有一个会话）
                 val session = sessions.first()
                 ShareHelper.generateHistoryShareText(session, currentState.selectedSessionRecords)
             }
-            SessionType.STOPWATCH -> {
+            AppMode.STOPWATCH -> {
                 // 秒表模式：分享当前选中的会话
                 val currentSession = sessions[currentState.currentSessionIndex]
                 ShareHelper.generateHistoryShareText(currentSession, currentState.selectedSessionRecords)
@@ -239,7 +250,7 @@ class HistoryViewModel(
             _uiState.update { it.copy(isLoading = true) }
 
             val dateString = date.toString()
-            val mode = _uiState.value.currentMode
+            val mode = _uiState.value.currentMode.toSessionType()
 
             // 使用 Flow 收集会话列表
             historyRepository.getSessionsByDate(dateString, mode)
@@ -288,7 +299,7 @@ class HistoryViewModel(
      */
     private fun loadDatesWithRecords() {
         viewModelScope.launch {
-            val mode = _uiState.value.currentMode
+            val mode = _uiState.value.currentMode.toSessionType()
 
             // 使用 Flow 收集有记录的日期
             historyRepository.getDatesWithRecords(mode)
