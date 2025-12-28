@@ -70,5 +70,10 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
+# Backup files
+*.backup
+*.bak
+*~
+
 # Kotlin incremental compilation cache
 .kotlin/
