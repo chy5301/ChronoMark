@@ -1,16 +1,12 @@
 package io.github.chy5301.chronomark.ui.screen
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -27,6 +23,7 @@ import io.github.chy5301.chronomark.data.DataStoreManager
 import io.github.chy5301.chronomark.data.database.AppDatabase
 import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.AppMode
+import io.github.chy5301.chronomark.ui.components.navigation.ModeNavigationBar
 import io.github.chy5301.chronomark.viewmodel.EventViewModel
 import io.github.chy5301.chronomark.viewmodel.EventViewModelFactory
 import io.github.chy5301.chronomark.viewmodel.StopwatchViewModel
@@ -159,30 +156,17 @@ fun MainScreen() {
             )
         },
         bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    icon = { Icon(Icons.Filled.Event, contentDescription = "事件") },
-                    label = { Text("事件") },
-                    selected = currentMode == AppMode.EVENT,
-                    onClick = {
-                        coroutineScope.launch {
-                            dataStoreManager.saveCurrentMode(AppMode.EVENT)
-                                .onFailure { e -> e.printStackTrace() }
-                        }
+            ModeNavigationBar(
+                currentMode = currentMode,
+                eventMode = AppMode.EVENT,
+                stopwatchMode = AppMode.STOPWATCH,
+                onModeChange = { mode ->
+                    coroutineScope.launch {
+                        dataStoreManager.saveCurrentMode(mode)
+                            .onFailure { e -> e.printStackTrace() }
                     }
-                )
-                NavigationBarItem(
-                    icon = { Icon(Icons.Filled.Timer, contentDescription = "秒表") },
-                    label = { Text("秒表") },
-                    selected = currentMode == AppMode.STOPWATCH,
-                    onClick = {
-                        coroutineScope.launch {
-                            dataStoreManager.saveCurrentMode(AppMode.STOPWATCH)
-                                .onFailure { e -> e.printStackTrace() }
-                        }
-                    }
-                )
-            }
+                }
+            )
         }
     ) { paddingValues ->
         when (currentMode) {

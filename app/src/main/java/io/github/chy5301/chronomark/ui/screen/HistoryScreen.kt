@@ -13,11 +13,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,6 +32,7 @@ import io.github.chy5301.chronomark.data.database.AppDatabase
 import io.github.chy5301.chronomark.data.database.entity.TimeRecordEntity
 import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.SessionType
+import io.github.chy5301.chronomark.ui.components.navigation.ModeNavigationBar
 import io.github.chy5301.chronomark.util.TimeFormatter
 import io.github.chy5301.chronomark.viewmodel.HistoryViewModel
 import io.github.chy5301.chronomark.viewmodel.HistoryViewModelFactory
@@ -324,20 +323,12 @@ fun HistoryScreen(
         },
         bottomBar = {
             // 底部导航栏（事件/秒表切换）
-            NavigationBar {
-                NavigationBarItem(
-                    selected = uiState.currentMode == SessionType.EVENT,
-                    onClick = { viewModel.switchMode(SessionType.EVENT) },
-                    icon = { Icon(Icons.Filled.Event, contentDescription = "事件") },
-                    label = { Text("事件") }
-                )
-                NavigationBarItem(
-                    selected = uiState.currentMode == SessionType.STOPWATCH,
-                    onClick = { viewModel.switchMode(SessionType.STOPWATCH) },
-                    icon = { Icon(Icons.Filled.Timer, contentDescription = "秒表") },
-                    label = { Text("秒表") }
-                )
-            }
+            ModeNavigationBar(
+                currentMode = uiState.currentMode,
+                eventMode = SessionType.EVENT,
+                stopwatchMode = SessionType.STOPWATCH,
+                onModeChange = { mode -> viewModel.switchMode(mode) }
+            )
         }
     ) { paddingValues ->
         Column(

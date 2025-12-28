@@ -17,13 +17,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -38,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.chy5301.chronomark.data.model.TimeRecord
+import io.github.chy5301.chronomark.ui.components.dialog.ConfirmDialog
 import io.github.chy5301.chronomark.ui.theme.TabularNumbersStyle
 import io.github.chy5301.chronomark.util.TimeFormatter
 import io.github.chy5301.chronomark.viewmodel.EventViewModel
@@ -74,59 +72,35 @@ fun EventScreen(
     }
 
     // 删除确认对话框
-    if (showDeleteConfirm && selectedRecord != null) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("确认删除") },
-            text = { Text("确定要删除记录 #${"%02d".format(selectedRecord!!.index)} 吗？") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.deleteRecord(selectedRecord!!.id)
-                        showDeleteConfirm = false
-                        selectedRecord = null
-                    },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text("删除")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("取消")
-                }
+    ConfirmDialog(
+        show = showDeleteConfirm && selectedRecord != null,
+        title = "确认删除",
+        message = "确定要删除记录 #${if (selectedRecord != null) "%02d".format(selectedRecord!!.index) else ""} 吗？",
+        confirmText = "删除",
+        isDangerous = true,
+        onConfirm = {
+            selectedRecord?.let { record ->
+                viewModel.deleteRecord(record.id)
             }
-        )
-    }
+            showDeleteConfirm = false
+            selectedRecord = null
+        },
+        onDismiss = { showDeleteConfirm = false }
+    )
 
     // 重置确认对话框
-    if (showResetConfirm) {
-        AlertDialog(
-            onDismissRequest = { showResetConfirm = false },
-            title = { Text("确认重置") },
-            text = { Text("确定要清空所有事件记录吗？此操作无法撤销。") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.reset()
-                        showResetConfirm = false
-                    },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text("重置")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showResetConfirm = false }) {
-                    Text("取消")
-                }
-            }
-        )
-    }
+    ConfirmDialog(
+        show = showResetConfirm,
+        title = "确认重置",
+        message = "确定要清空所有事件记录吗？此操作无法撤销。",
+        confirmText = "重置",
+        isDangerous = true,
+        onConfirm = {
+            viewModel.reset()
+            showResetConfirm = false
+        },
+        onDismiss = { showResetConfirm = false }
+    )
 
     Column(
         modifier = Modifier
