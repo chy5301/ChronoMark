@@ -1,6 +1,5 @@
 package io.github.chy5301.chronomark.ui.screen
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,8 +16,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,8 +34,9 @@ import androidx.compose.ui.unit.sp
 import io.github.chy5301.chronomark.data.model.TimeRecord
 import io.github.chy5301.chronomark.ui.components.dialog.ConfirmDialog
 import io.github.chy5301.chronomark.ui.components.dialog.EditRecordDialog
+import io.github.chy5301.chronomark.ui.components.record.RecordCardMode
+import io.github.chy5301.chronomark.ui.components.record.UnifiedRecordCard
 import io.github.chy5301.chronomark.ui.theme.TabularNumbersStyle
-import io.github.chy5301.chronomark.util.TimeFormatter
 import io.github.chy5301.chronomark.viewmodel.EventViewModel
 
 /**
@@ -263,61 +261,10 @@ fun EventRecordsListSection(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(records) { record ->
-                EventRecordCard(
+                UnifiedRecordCard(
                     record = record,
+                    mode = RecordCardMode.EVENT,
                     onClick = { onRecordClick(record) }
-                )
-            }
-        }
-    }
-}
-
-/**
- * 事件模式 - 记录卡片组件
- */
-@Composable
-fun EventRecordCard(
-    record: TimeRecord,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            // 序号 + 标记时刻
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "%02d".format(record.index),
-                    style = TabularNumbersStyle,
-                    fontSize = 16.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = TimeFormatter.formatWallClock(record.wallClockTime),
-                    style = TabularNumbersStyle,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-
-            // 备注（如果有）
-            if (record.note.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "📝 ${record.note}",
-                    fontSize = 16.sp,
-                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
         }

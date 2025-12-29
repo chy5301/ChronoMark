@@ -3,21 +3,54 @@ package io.github.chy5301.chronomark.ui.screen
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ElevatedButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,6 +68,8 @@ import io.github.chy5301.chronomark.data.model.AppMode
 import io.github.chy5301.chronomark.ui.components.dialog.ConfirmDialog
 import io.github.chy5301.chronomark.ui.components.dialog.EditRecordDialog
 import io.github.chy5301.chronomark.ui.components.navigation.ModeNavigationBar
+import io.github.chy5301.chronomark.ui.components.record.RecordCardMode
+import io.github.chy5301.chronomark.ui.components.record.UnifiedRecordCard
 import io.github.chy5301.chronomark.util.TimeFormatter
 import io.github.chy5301.chronomark.viewmodel.HistoryViewModel
 import io.github.chy5301.chronomark.viewmodel.HistoryViewModelFactory
@@ -523,93 +558,11 @@ fun EventHistoryRecordsList(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(records) { record ->
-            HistoryRecordCard(
+            UnifiedRecordCard(
                 record = record,
+                mode = RecordCardMode.EVENT,
                 onClick = { onRecordClick(record) }
             )
-        }
-    }
-}
-
-/**
- * 历史记录卡片组件（适用于事件和秒表模式）
- */
-@Composable
-fun HistoryRecordCard(
-    record: TimeRecordEntity,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    showElapsedTime: Boolean = false  // 是否显示累计时间（秒表模式）
-) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            // 序号 + 标记时刻（或累计时间）
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = String.format(Locale.US, "%02d", record.index),
-                    fontSize = 16.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                if (showElapsedTime) {
-                    // 秒表模式：显示累计时间
-                    Text(
-                        text = TimeFormatter.formatElapsed(record.elapsedTimeNanos),
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                } else {
-                    // 事件模式：显示标记时刻
-                    Text(
-                        text = TimeFormatter.formatWallClock(record.wallClockTime),
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
-
-            // 秒表模式的额外信息（时间差 + 标记时刻）
-            if (showElapsedTime) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = TimeFormatter.formatSplit(record.splitTimeNanos),
-                        fontSize = 20.sp,
-                        color = MaterialTheme.colorScheme.tertiary
-                    )
-                    Text(
-                        text = TimeFormatter.formatWallClock(record.wallClockTime),
-                        fontSize = 18.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            // 备注（如果有）
-            if (record.note.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "📝 ${record.note}",
-                    fontSize = 16.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
         }
     }
 }
@@ -655,10 +608,10 @@ fun StopwatchHistoryRecordsList(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(records) { record ->
-            HistoryRecordCard(
+            UnifiedRecordCard(
                 record = record,
-                onClick = { onRecordClick(record) },
-                showElapsedTime = true  // 秒表模式显示累计时间
+                mode = RecordCardMode.STOPWATCH,
+                onClick = { onRecordClick(record) }
             )
         }
     }

@@ -1,6 +1,5 @@
 package io.github.chy5301.chronomark.ui.screen
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -25,10 +23,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import io.github.chy5301.chronomark.ui.components.dialog.ConfirmDialog
-import io.github.chy5301.chronomark.ui.components.dialog.EditRecordDialog
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -51,8 +45,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.chy5301.chronomark.data.model.StopwatchStatus
 import io.github.chy5301.chronomark.data.model.TimeRecord
+import io.github.chy5301.chronomark.ui.components.dialog.ConfirmDialog
+import io.github.chy5301.chronomark.ui.components.dialog.EditRecordDialog
+import io.github.chy5301.chronomark.ui.components.record.RecordCardMode
+import io.github.chy5301.chronomark.ui.components.record.UnifiedRecordCard
 import io.github.chy5301.chronomark.ui.theme.TabularNumbersStyle
-import io.github.chy5301.chronomark.util.TimeFormatter
 import io.github.chy5301.chronomark.viewmodel.StopwatchViewModel
 
 /**
@@ -326,83 +323,10 @@ fun RecordsListSection(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(records) { record ->
-                RecordCard(
+                UnifiedRecordCard(
                     record = record,
+                    mode = RecordCardMode.STOPWATCH,
                     onClick = { onRecordClick(record) }
-                )
-            }
-        }
-    }
-}
-
-/**
- * 记录卡片组件
- */
-@Composable
-fun RecordCard(
-    record: TimeRecord,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            // 第一行：序号 + 累计时间
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "%02d".format(record.index),
-                    style = TabularNumbersStyle,
-                    fontSize = 16.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = TimeFormatter.formatElapsed(record.elapsedTimeNanos),
-                    style = TabularNumbersStyle,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // 第二行：时间差 + 标记时刻
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = TimeFormatter.formatSplit(record.splitTimeNanos),
-                    style = TabularNumbersStyle,
-                    fontSize = 20.sp,
-                    color = MaterialTheme.colorScheme.tertiary
-                )
-                Text(
-                    text = TimeFormatter.formatWallClock(record.wallClockTime),
-                    style = TabularNumbersStyle,
-                    fontSize = 18.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // 第三行：备注（如果有）
-            if (record.note.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "📝 ${record.note}",
-                    fontSize = 16.sp,
-                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
         }
