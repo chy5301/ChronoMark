@@ -234,10 +234,14 @@ class HistoryViewModel(
                 val session = sessions.first()
                 ShareHelper.generateHistoryShareText(session, currentState.selectedSessionRecords)
             }
+
             AppMode.STOPWATCH -> {
                 // 秒表模式：分享当前选中的会话
                 val currentSession = sessions[currentState.currentSessionIndex]
-                ShareHelper.generateHistoryShareText(currentSession, currentState.selectedSessionRecords)
+                ShareHelper.generateHistoryShareText(
+                    currentSession,
+                    currentState.selectedSessionRecords
+                )
             }
         }
     }

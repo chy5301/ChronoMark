@@ -71,10 +71,6 @@ import java.util.Locale
  * )
  * ```
  */
-
-/**
- * 编辑记录对话框 - TimeRecord 版本（工作区记录）
- */
 @Composable
 fun EditRecordDialog(
     record: TimeRecord,
@@ -96,9 +92,6 @@ fun EditRecordDialog(
     )
 }
 
-/**
- * 编辑记录对话框 - TimeRecordEntity 版本（历史记录）
- */
 @Composable
 fun EditRecordDialog(
     record: TimeRecordEntity,

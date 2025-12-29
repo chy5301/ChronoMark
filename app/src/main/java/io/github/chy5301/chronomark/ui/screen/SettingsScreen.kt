@@ -475,7 +475,7 @@ fun BoundaryTimePickerDialog(
         is24Hour = true
     )
 
-    AlertDialog(
+    BasicAlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.fillMaxWidth()
     ) {

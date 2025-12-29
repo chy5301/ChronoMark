@@ -1,4 +1,4 @@
-package io.github.chy5301.chronomark.ui.components.record
+package io.github.chy5301.chronomark.data.model
 
 /**
  * 记录卡片显示模式

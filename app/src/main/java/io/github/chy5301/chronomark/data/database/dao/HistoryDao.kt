@@ -66,35 +66,6 @@ interface HistoryDao {
     )
     fun getDatesWithRecords(sessionType: SessionType): Flow<List<String>>
 
-    /**
-     * 查询指定日期的会话数量
-     *
-     * @param date 日期字符串
-     * @param sessionType 会话类型
-     * @return 会话数量
-     */
-    @Query(
-        """
-        SELECT COUNT(*) FROM history_sessions
-        WHERE date = :date AND session_type = :sessionType
-    """
-    )
-    suspend fun getSessionCountByDate(date: String, sessionType: SessionType): Int
-
-    /**
-     * 查询指定会话的记录数量
-     *
-     * @param sessionId 会话 ID
-     * @return 记录数量
-     */
-    @Query(
-        """
-        SELECT COUNT(*) FROM time_records
-        WHERE session_id = :sessionId
-    """
-    )
-    suspend fun getRecordCountBySessionId(sessionId: String): Int
-
     // ========== 插入操作 ==========
 
     /**

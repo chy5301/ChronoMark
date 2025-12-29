@@ -65,10 +65,10 @@ import io.github.chy5301.chronomark.data.database.AppDatabase
 import io.github.chy5301.chronomark.data.database.entity.TimeRecordEntity
 import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.AppMode
+import io.github.chy5301.chronomark.data.model.RecordCardMode
 import io.github.chy5301.chronomark.ui.components.dialog.ConfirmDialog
 import io.github.chy5301.chronomark.ui.components.dialog.EditRecordDialog
 import io.github.chy5301.chronomark.ui.components.navigation.ModeNavigationBar
-import io.github.chy5301.chronomark.ui.components.record.RecordCardMode
 import io.github.chy5301.chronomark.ui.components.record.UnifiedRecordCard
 import io.github.chy5301.chronomark.util.TimeFormatter
 import io.github.chy5301.chronomark.viewmodel.HistoryViewModel

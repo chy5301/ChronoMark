@@ -159,27 +159,6 @@ class HistoryRepository(
         return historyDao.getDatesWithRecords(sessionType)
     }
 
-    /**
-     * 查询指定日期的会话数量
-     *
-     * @param date 日期字符串
-     * @param sessionType 会话类型
-     * @return 会话数量
-     */
-    suspend fun getSessionCountByDate(date: String, sessionType: SessionType): Int {
-        return historyDao.getSessionCountByDate(date, sessionType)
-    }
-
-    /**
-     * 查询指定会话的记录数量
-     *
-     * @param sessionId 会话 ID
-     * @return 记录数量
-     */
-    suspend fun getRecordCountBySessionId(sessionId: String): Int {
-        return historyDao.getRecordCountBySessionId(sessionId)
-    }
-
     // ========== 更新操作 ==========
 
     /**

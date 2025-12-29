@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.chy5301.chronomark.data.database.entity.TimeRecordEntity
+import io.github.chy5301.chronomark.data.model.RecordCardMode
 import io.github.chy5301.chronomark.data.model.TimeRecord
 import io.github.chy5301.chronomark.ui.theme.TabularNumbersStyle
 import io.github.chy5301.chronomark.util.TimeFormatter

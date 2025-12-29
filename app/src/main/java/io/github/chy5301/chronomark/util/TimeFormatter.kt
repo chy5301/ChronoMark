@@ -69,19 +69,6 @@ object TimeFormatter {
     }
 
     /**
-     * 格式化完整时间戳（用于导出）
-     *
-     * @param timestampMillis 时间戳（毫秒）
-     * @return 格式化的完整时间字符串（yyyy-MM-dd HH:mm:ss.SSS）
-     */
-    fun formatFullTimestamp(timestampMillis: Long): String {
-        val instant = Instant.ofEpochMilli(timestampMillis)
-        val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
-            .withZone(ZoneId.systemDefault())
-        return formatter.format(instant)
-    }
-
-    /**
      * 格式化日期（用于分享文本）
      *
      * @param timestampMillis 时间戳（毫秒）

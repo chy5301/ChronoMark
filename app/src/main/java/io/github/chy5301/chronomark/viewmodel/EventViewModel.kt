@@ -161,40 +161,6 @@ class EventViewModel(
     }
 
     /**
-     * 自动归档（跨天时触发）
-     * 将昨日的事件记录归档到历史数据库
-     */
-    suspend fun autoArchive() {
-        val records = _uiState.value.records
-        if (records.isEmpty()) {
-            Log.i(TAG, "No records to archive")
-            return
-        }
-
-        Log.i(TAG, "Starting auto archive for ${records.size} records")
-
-        // 1. 归档到 Room 数据库
-        historyRepository.archiveEventRecords(records)
-            .onSuccess {
-                Log.i(TAG, "Archive successful, clearing workspace")
-
-                // 2. 清空 DataStore 工作区
-                dataStoreManager.clearEventRecords()
-                    .onFailure { e ->
-                        Log.e(TAG, "Failed to clear workspace after archive", e)
-                    }
-
-                // 3. 更新 UI 状态
-                _uiState.update { it.copy(records = emptyList()) }
-
-                Log.i(TAG, "Auto archive completed: ${records.size} records archived")
-            }
-            .onFailure { e ->
-                Log.e(TAG, "Archive failed", e)
-            }
-    }
-
-    /**
      * 保存记录
      */
     private fun saveRecords() {
