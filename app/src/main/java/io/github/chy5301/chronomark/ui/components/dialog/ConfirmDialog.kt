@@ -16,12 +16,12 @@ import androidx.compose.ui.Modifier
  * @param show 是否显示对话框
  * @param title 对话框标题
  * @param message 对话框内容消息
- * @param confirmText 确认按钮文本（默认"确定"）
- * @param dismissText 取消按钮文本（默认"取消"）
  * @param onConfirm 确认按钮点击回调
  * @param onDismiss 取消/关闭对话框回调
- * @param isDangerous 是否为危险操作（true 时确认按钮显示为红色）
  * @param modifier 修饰符
+ * @param confirmText 确认按钮文本（默认"确定"）
+ * @param dismissText 取消按钮文本（默认"取消"）
+ * @param isDangerous 是否为危险操作（true 时确认按钮显示为红色）
  *
  * 使用示例：
  * ```kotlin
@@ -58,12 +58,12 @@ fun ConfirmDialog(
     show: Boolean,
     title: String,
     message: String,
-    confirmText: String = "确定",
-    dismissText: String = "取消",
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
-    isDangerous: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    confirmText: String = "确定",
+    dismissText: String = "取消",
+    isDangerous: Boolean = false
 ) {
     if (show) {
         AlertDialog(
