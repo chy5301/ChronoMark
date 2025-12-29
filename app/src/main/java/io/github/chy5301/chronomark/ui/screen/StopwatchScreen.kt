@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.chy5301.chronomark.data.model.StopwatchStatus
 import io.github.chy5301.chronomark.data.model.TimeRecord
+import io.github.chy5301.chronomark.ui.components.button.ControlButton
 import io.github.chy5301.chronomark.ui.components.dialog.ConfirmDialog
 import io.github.chy5301.chronomark.ui.components.dialog.EditRecordDialog
 import io.github.chy5301.chronomark.ui.components.record.RecordCardMode
@@ -410,34 +411,3 @@ fun ControlButtonsSection(
         }
     }
 }
-
-/**
- * 统一样式的控制按钮
- */
-@Composable
-fun ControlButton(
-    onClick: () -> Unit,
-    icon: ImageVector,
-    contentDescription: String,
-    modifier: Modifier = Modifier,
-    containerColor: Color = MaterialTheme.colorScheme.surface,
-    contentColor: Color = MaterialTheme.colorScheme.primary
-) {
-    ElevatedButton(
-        onClick = onClick,
-        modifier = modifier.size(80.dp),
-        shape = CircleShape,
-        colors = ButtonDefaults.elevatedButtonColors(
-            containerColor = containerColor,
-            contentColor = contentColor
-        ),
-        elevation = ButtonDefaults.elevatedButtonElevation(defaultElevation = 4.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            modifier = Modifier.size(32.dp)
-        )
-    }
-}
-
