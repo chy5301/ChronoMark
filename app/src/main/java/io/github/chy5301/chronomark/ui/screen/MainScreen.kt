@@ -1,15 +1,5 @@
 package io.github.chy5301.chronomark.ui.screen
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -18,160 +8,95 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.chy5301.chronomark.data.DataStoreManager
-import io.github.chy5301.chronomark.data.database.AppDatabase
-import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.AppMode
-import io.github.chy5301.chronomark.ui.components.navigation.ModeNavigationBar
-import io.github.chy5301.chronomark.viewmodel.EventViewModel
-import io.github.chy5301.chronomark.viewmodel.EventViewModelFactory
-import io.github.chy5301.chronomark.viewmodel.StopwatchViewModel
-import io.github.chy5301.chronomark.viewmodel.StopwatchViewModelFactory
+import io.github.chy5301.chronomark.data.model.AppScreen
 import kotlinx.coroutines.launch
 
 /**
- * 主屏幕 - 管理秒表和事件模式的切换
+ * 应用主屏幕 - 顶层页面导航管理器
+ *
+ * 负责管理应用的三个主要页面：
+ * - WORKSPACE: 主工作区（包含事件/秒表 Tab 切换）
+ * - HISTORY: 历史记录查看
+ * - SETTINGS: 应用设置
+ *
+ * 状态管理策略：
+ * - currentMode: 持久化到 DataStore，记住用户的工作模式偏好
+ * - currentScreen: 不持久化，每次启动从 WORKSPACE 开始
+ * - 历史记录的模式切换不影响主工作区的模式
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen() {
     val context = LocalContext.current
     val dataStoreManager = remember { DataStoreManager(context) }
-    val historyRepository = remember {
-        val database = AppDatabase.getDatabase(context)
-        HistoryRepository(database.historyDao())
-    }
     val coroutineScope = rememberCoroutineScope()
 
-    // 从 DataStore 读取当前模式
+    // 从 DataStore 读取当前工作模式（持久化）
     val currentMode by dataStoreManager.currentModeFlow.collectAsState(initial = AppMode.EVENT)
 
-    // 创建两个 ViewModel（根据模式使用对应的）
-    val stopwatchViewModel: StopwatchViewModel = viewModel(
-        factory = StopwatchViewModelFactory(dataStoreManager, historyRepository)
-    )
-    val eventViewModel: EventViewModel = viewModel(
-        factory = EventViewModelFactory(dataStoreManager, historyRepository)
-    )
+    // 当前显示的页面（不持久化，每次启动从工作区开始）
+    var currentScreen by remember { mutableStateOf(AppScreen.WORKSPACE) }
 
-    // 设置页面导航状态
-    var showSettings by remember { mutableStateOf(false) }
-    // 历史记录页面导航状态
-    var showHistory by remember { mutableStateOf(false) }
-
-    // 如果显示设置页面，直接返回设置界面
-    if (showSettings) {
-        SettingsScreen(onBackClick = { showSettings = false })
-        return
-    }
-
-    // 如果显示历史记录页面，直接返回历史界面
-    if (showHistory) {
-        HistoryScreen(
-            initialMode = currentMode,
-            onBackClick = { appMode ->
-                // 根据历史记录的当前模式切换主界面模式
+    when (currentScreen) {
+        AppScreen.WORKSPACE -> WorkspaceScreen(
+            currentMode = currentMode,
+            onModeChange = { mode ->
+                // 保存模式切换到 DataStore
                 coroutineScope.launch {
-                    dataStoreManager.saveCurrentMode(appMode)
+                    dataStoreManager.saveCurrentMode(mode)
                         .onFailure { e -> e.printStackTrace() }
                 }
-                showHistory = false
+            },
+            onHistoryClick = {
+                currentScreen = AppScreen.HISTORY
             },
             onSettingsClick = {
-                showHistory = false
-                showSettings = true
+                currentScreen = AppScreen.SETTINGS
             }
         )
-        return
-    }
 
-    // 根据当前模式获取对应的状态和方法
-    val stopwatchUiState by stopwatchViewModel.uiState.collectAsState()
-    val eventUiState by eventViewModel.uiState.collectAsState()
-
-    // 读取震动反馈设置
-    val vibrationEnabled by dataStoreManager.vibrationEnabledFlow.collectAsState(initial = true)
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        when (currentMode) {
-                            AppMode.STOPWATCH -> "秒表"
-                            AppMode.EVENT -> "事件"
+        AppScreen.HISTORY -> {
+            // 根据当前模式选择对应的历史页面
+            when (currentMode) {
+                AppMode.EVENT -> EventHistoryScreen(
+                    onBackClick = {
+                        currentScreen = AppScreen.WORKSPACE
+                    },
+                    onSettingsClick = {
+                        currentScreen = AppScreen.SETTINGS
+                    },
+                    onModeChange = { mode ->
+                        // 保存模式切换到 DataStore
+                        coroutineScope.launch {
+                            dataStoreManager.saveCurrentMode(mode)
+                                .onFailure { e -> e.printStackTrace() }
                         }
-                    )
-                },
-                actions = {
-                    // 分享按钮
-                    IconButton(
-                        onClick = {
-                            val records = when (currentMode) {
-                                AppMode.STOPWATCH -> stopwatchUiState.records
-                                AppMode.EVENT -> eventUiState.records
-                            }
+                    }
+                )
 
-                            if (records.isEmpty()) {
-                                android.widget.Toast.makeText(
-                                    context,
-                                    "暂无记录",
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
-                            } else {
-                                val shareText = when (currentMode) {
-                                    AppMode.STOPWATCH -> stopwatchViewModel.generateShareText()
-                                    AppMode.EVENT -> eventViewModel.generateShareText()
-                                }
-                                val sendIntent = android.content.Intent().apply {
-                                    action = android.content.Intent.ACTION_SEND
-                                    putExtra(android.content.Intent.EXTRA_TEXT, shareText)
-                                    type = "text/plain"
-                                }
-                                val shareIntent =
-                                    android.content.Intent.createChooser(sendIntent, "分享记录")
-                                context.startActivity(shareIntent)
-                            }
+                AppMode.STOPWATCH -> StopwatchHistoryScreen(
+                    onBackClick = {
+                        currentScreen = AppScreen.WORKSPACE
+                    },
+                    onSettingsClick = {
+                        currentScreen = AppScreen.SETTINGS
+                    },
+                    onModeChange = { mode ->
+                        // 保存模式切换到 DataStore
+                        coroutineScope.launch {
+                            dataStoreManager.saveCurrentMode(mode)
+                                .onFailure { e -> e.printStackTrace() }
                         }
-                    ) {
-                        Icon(Icons.Default.Share, contentDescription = "分享")
                     }
-                    // 历史按钮
-                    IconButton(onClick = { showHistory = true }) {
-                        Icon(Icons.Default.History, contentDescription = "历史")
-                    }
-                    // 设置按钮
-                    IconButton(onClick = { showSettings = true }) {
-                        Icon(Icons.Default.Settings, contentDescription = "设置")
-                    }
-                }
-            )
-        },
-        bottomBar = {
-            ModeNavigationBar(
-                currentMode = currentMode,
-                onModeChange = { mode ->
-                    coroutineScope.launch {
-                        dataStoreManager.saveCurrentMode(mode)
-                            .onFailure { e -> e.printStackTrace() }
-                    }
-                }
-            )
+                )
+            }
         }
-    ) { paddingValues ->
-        when (currentMode) {
-            AppMode.STOPWATCH -> StopwatchScreen(
-                viewModel = stopwatchViewModel,
-                paddingValues = paddingValues,
-                vibrationEnabled = vibrationEnabled
-            )
 
-            AppMode.EVENT -> EventScreen(
-                viewModel = eventViewModel,
-                paddingValues = paddingValues,
-                vibrationEnabled = vibrationEnabled
-            )
-        }
+        AppScreen.SETTINGS -> SettingsScreen(
+            onBackClick = {
+                currentScreen = AppScreen.WORKSPACE
+            }
+        )
     }
 }

@@ -5,16 +5,19 @@ import androidx.lifecycle.ViewModelProvider
 import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 
 /**
- * HistoryViewModel 工厂类
+ * 秒表模式历史记录 ViewModel 工厂类
+ *
+ * 用于创建 StopwatchHistoryViewModel 实例并注入依赖。
  */
-class HistoryViewModelFactory(
+class StopwatchHistoryViewModelFactory(
     private val historyRepository: HistoryRepository
 ) : ViewModelProvider.Factory {
+
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(HistoryViewModel::class.java)) {
-            return HistoryViewModel(historyRepository) as T
+        if (modelClass.isAssignableFrom(StopwatchHistoryViewModel::class.java)) {
+            return StopwatchHistoryViewModel(historyRepository) as T
         }
-        throw IllegalArgumentException("Unknown ViewModel class")
+        throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }
 }

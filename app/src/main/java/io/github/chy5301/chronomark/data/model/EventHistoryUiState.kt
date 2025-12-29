@@ -5,14 +5,14 @@ import io.github.chy5301.chronomark.data.database.entity.TimeRecordEntity
 import java.time.LocalDate
 
 /**
- * 历史记录页面 UI 状态
+ * 事件模式历史记录 UI 状态
+ *
+ * 事件模式一天只有一个会话（自动归档），因此不需要 currentSessionIndex。
  */
-data class HistoryUiState(
-    val currentMode: AppMode = AppMode.EVENT,  // 当前选中模式（事件/秒表）
+data class EventHistoryUiState(
     val selectedDate: LocalDate = LocalDate.now(),     // 当前选中日期
-    val sessions: List<HistorySessionEntity> = emptyList(),  // 当前选中日期的会话列表
+    val sessions: List<HistorySessionEntity> = emptyList(),  // 当前日期的会话（事件模式一天只有一个）
     val selectedSessionRecords: List<TimeRecordEntity> = emptyList(),  // 当前会话的记录
-    val currentSessionIndex: Int = 0,                  // 当前选中的会话索引（秒表模式）
     val datesWithRecords: Set<LocalDate> = emptySet(), // 有记录的日期集合（日历标记用）
     val isLoading: Boolean = false
 )
