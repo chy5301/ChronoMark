@@ -37,9 +37,10 @@ proguard/
 *.hprof
 logs/
 
-# Keystore files
+# Keystore files (签名密钥，严禁提交到版本控制)
 *.jks
 *.keystore
+keystore.properties
 
 # Google Services (uncomment if needed)
 # google-services.json

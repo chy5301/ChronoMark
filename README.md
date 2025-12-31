@@ -118,10 +118,20 @@ ChronoMark 事件记录
 ...
 ```
 
+#### 📚 历史记录
+
+- **事件模式**：自动按天归档，可自定义归档分界点（如 04:00 前记录归档到前一天）
+- **秒表模式**：手动保存会话，支持自定义会话标题
+- **历史管理**：日期选择、日历选择器、会话切换、记录编辑/删除
+- **历史分享**：分享指定日期的所有记录或单个会话
+- **自动清理**：可配置历史记录保留时长（30/90/180/365天或永久）
+
 #### ⚙️ 实用设置
 
+- 🎨 **主题模式**：浅色/深色/跟随系统
 - 🔆 **保持屏幕常亮**：计时时屏幕不会自动熄灭
 - 📳 **震动反馈**：按钮点击时提供触觉反馈
+- 🔄 **归档配置**：自动归档开关、归档分界点、历史保留时长
 - 💾 **设置持久化**：应用重启后保留设置
 
 ---
@@ -130,16 +140,18 @@ ChronoMark 事件记录
 
 ### 系统要求
 
-- Android 7.0 (API 24) 及以上
-- 推荐 Android 8.0 (API 26) 及以上以获得最佳体验
+- Android 8.0 (API 26) 及以上
+- 支持所有 Android 手机（包括华为、小米、OPPO 等国产品牌）
 
 ### 安装方式
 
 #### 方式一：下载 APK（推荐）
 
-1. 前往 [Releases](https://github.com/chy5301/ChronoMark/releases) 页面
-2. 下载最新版本的 APK 文件
-3. 在手机上安装 APK
+1. 前往 [GitHub Releases](https://github.com/chy5301/ChronoMark/releases) 页面
+2. 下载最新版本的 `ChronoMark-v1.0.0.apk` 文件
+3. 在手机上打开 APK 文件
+4. 允许安装未知来源应用（如需要）
+5. 完成安装
 
 #### 方式二：从源码构建
 
@@ -204,8 +216,12 @@ cd ChronoMark
 - **架构模式**：MVVM (Model-View-ViewModel)
 - **异步处理**：Kotlin Coroutines + Flow
 - **状态管理**：StateFlow
-- **数据持久化**：DataStore + Kotlinx Serialization
-- **时间处理**：java.time API
+- **数据持久化**：
+  - DataStore：应用设置和工作区数据
+  - Room 数据库：历史记录存储
+  - Kotlinx Serialization：数据序列化
+- **代码混淆**：R8 (APK 体积优化)
+- **时间处理**：java.time API (高精度 nanoTime)
 
 ### 项目结构
 
@@ -213,29 +229,41 @@ cd ChronoMark
 app/src/main/java/io/github/chy5301/chronomark/
 ├── MainActivity.kt              # 主入口 Activity
 ├── data/
-│   ├── DataStoreManager.kt      # 数据持久化管理器
+│   ├── DataStoreManager.kt      # DataStore 管理器
+│   ├── database/                # Room 数据库
+│   │   ├── AppDatabase.kt       # 数据库实例
+│   │   ├── dao/                 # 数据访问对象
+│   │   ├── entity/              # 数据库实体
+│   │   └── repository/          # 数据仓库层
 │   └── model/                   # 数据模型
 │       ├── AppMode.kt           # 应用模式枚举
 │       ├── TimeRecord.kt        # 时间记录数据模型
 │       ├── StopwatchStatus.kt   # 秒表状态枚举
-│       ├── StopwatchUiState.kt  # 秒表 UI 状态
-│       └── EventUiState.kt      # 事件 UI 状态
+│       ├── RecordCardMode.kt    # 记录卡片模式枚举
+│       ├── SessionType.kt       # 会话类型枚举
+│       └── *UiState.kt          # UI 状态数据类
 ├── ui/
-│   ├── screen/                  # UI 页面
-│   │   ├── MainScreen.kt        # 主屏幕（管理双模式切换）
+│   ├── screen/                  # 页面层
+│   │   ├── MainScreen.kt        # 主屏幕
 │   │   ├── StopwatchScreen.kt   # 秒表屏幕
 │   │   ├── EventScreen.kt       # 事件屏幕
+│   │   ├── HistoryScreen.kt     # 历史记录屏幕
 │   │   └── SettingsScreen.kt    # 设置页面
+│   ├── components/              # 共享组件层 (Phase 9)
+│   │   ├── navigation/          # 导航组件
+│   │   ├── record/              # 记录卡片组件
+│   │   ├── button/              # 按钮组件
+│   │   └── dialog/              # 对话框组件
 │   └── theme/                   # Compose 主题配置
 ├── util/                        # 工具类
 │   ├── TimeFormatter.kt         # 时间格式化
 │   ├── ShareHelper.kt           # 分享文本生成
-│   └── HapticFeedbackHelper.kt  # 震动反馈辅助
+│   └── ArchiveUtils.kt          # 归档工具（逻辑日期计算）
 └── viewmodel/                   # ViewModel 层
-    ├── StopwatchViewModel.kt
-    ├── StopwatchViewModelFactory.kt
-    ├── EventViewModel.kt
-    └── EventViewModelFactory.kt
+    ├── StopwatchViewModel.kt    # 秒表业务逻辑
+    ├── EventViewModel.kt        # 事件业务逻辑
+    ├── HistoryViewModel.kt      # 历史记录业务逻辑
+    └── *ViewModelFactory.kt     # ViewModel 工厂
 ```
 
 ---
@@ -293,23 +321,20 @@ app/src/main/java/io/github/chy5301/chronomark/
 
 ## 开发路线
 
-- [x] Phase 1: 基础计时功能
-- [x] Phase 2: 时间点记录
-- [x] Phase 3: 备注编辑
-- [x] Phase 4: 事件模式
-- [x] Phase 5: 数据持久化
-- [x] Phase 6: 分享与复制功能
-- [ ] Phase 7: 优化与完善（进行中）
-  - [x] 事件模式列表滚动优化
-  - [x] 设置页面实现
-  - [x] 代码质量优化
-  - [ ] UI/UX 打磨
-  - [ ] 性能优化
-  - [ ] 测试覆盖
-  - [ ] 文档完善
-  - [ ] 发布准备
+- [x] Phase 1-7: 核心功能完成
+- [x] Phase 8: 历史记录功能（2025-12-28 完成）
+- [x] Phase 9: 代码重构与架构优化（2025-12-29 完成）
+- [x] Phase 10: 自定义归档分界点（2025-12-31 完成）
+- [x] **v1.0.0: 正式版本发布**（2025-12-31）
 
-详细的开发计划和进度请查看 [TODO.md](./TODO.md)。
+### v1.1 规划
+- 返回键行为优化：主界面双击返回退出
+- 记录描述文本长度优化
+- 统计功能：记录数趋势图
+- 搜索功能：按备注搜索
+- 标签系统：工作/学习/运动分类
+
+详细的变更日志请查看 [CHANGELOG.md](./CHANGELOG.md)。
 
 ---
 

@@ -1,21 +1,64 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# ===== ChronoMark 混淆规则 =====
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# 保留 Room 数据库相关类
+-keep class io.github.chy5301.chronomark.data.database.** { *; }
+-keepclassmembers class io.github.chy5301.chronomark.data.database.** { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# 保留 DataStore Preferences
+-keep class androidx.datastore.preferences.** { *; }
+-keepclassmembers class androidx.datastore.preferences.** { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# 保留 Kotlinx Serialization
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.AnnotationsKt
+-keepclassmembers class kotlinx.serialization.json.** {
+    *** Companion;
+}
+-keepclasseswithmembers class kotlinx.serialization.json.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+-keep,includedescriptorclasses class io.github.chy5301.chronomark.**$$serializer { *; }
+-keepclassmembers class io.github.chy5301.chronomark.** {
+    *** Companion;
+}
+-keepclasseswithmembers class io.github.chy5301.chronomark.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# 保留数据模型类（用于序列化）
+-keep class io.github.chy5301.chronomark.data.model.** { *; }
+-keepclassmembers class io.github.chy5301.chronomark.data.model.** { *; }
+
+# 保留 Compose 相关
+-keep class androidx.compose.** { *; }
+-keep class androidx.compose.runtime.** { *; }
+-dontwarn androidx.compose.**
+
+# 保留 ViewModel
+-keep class * extends androidx.lifecycle.ViewModel {
+    <init>();
+}
+-keep class * extends androidx.lifecycle.AndroidViewModel {
+    <init>(android.app.Application);
+}
+
+# 保留 Parcelable
+-keepclassmembers class * implements android.os.Parcelable {
+    public static final android.os.Parcelable$Creator CREATOR;
+}
+
+# 保留枚举
+-keepclassmembers enum * {
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+}
+
+# 保留调试信息（可选，生产环境可注释掉以进一步减小体积）
+-keepattributes SourceFile,LineNumberTable
+
+# 移除日志（可选，生产环境建议启用以提升性能）
+# -assumenosideeffects class android.util.Log {
+#     public static *** d(...);
+#     public static *** v(...);
+#     public static *** i(...);
+# }
