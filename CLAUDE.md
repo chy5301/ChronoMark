@@ -1065,6 +1065,114 @@ MainScreen (Tab 容器)
 
 ---
 
+#### Phase 10: 自定义归档分界点功能（WorkManager 定时任务）⏳ 待实施
+
+> **状态**: 待实施
+> **优先级**: 中等（功能增强，非核心功能）
+> **相关 Issue**: 自动归档在自定义时间点无法触发的问题
+
+**背景**：
+- **当前实现**（方案B）：固定使用 00:00 作为归档分界点，只要跨天就归档
+- **问题**：用户无法自定义归档时间（如凌晨 4:00），缺乏灵活性
+- **临时方案**：相关设置代码已保留并注释，等待后续启用
+
+**目标**：实现真正的自定义归档分界点功能，使用 Android WorkManager 在指定时间点主动触发归档检查。
+
+**技术方案**（方案C）：
+
+**1. 使用 WorkManager 定时任务**
+```kotlin
+// 在设置 boundary 时间时，注册每日定时任务
+fun scheduleDailyArchiveCheck(boundaryHour: Int, boundaryMinute: Int) {
+    val currentTime = LocalTime.now()
+    val targetTime = LocalTime.of(boundaryHour, boundaryMinute)
+
+    // 计算距离下次 boundary 时间的延迟
+    val delay = if (currentTime.isBefore(targetTime)) {
+        Duration.between(currentTime, targetTime)
+    } else {
+        Duration.between(currentTime, targetTime.plusHours(24))
+    }
+
+    // 注册每日重复任务
+    val archiveWork = PeriodicWorkRequestBuilder<ArchiveWorker>(1, TimeUnit.DAYS)
+        .setInitialDelay(delay.toMinutes(), TimeUnit.MINUTES)
+        .build()
+
+    WorkManager.getInstance(context)
+        .enqueueUniquePeriodicWork(
+            "daily_archive",
+            ExistingPeriodicWorkPolicy.REPLACE,
+            archiveWork
+        )
+}
+```
+
+**2. 创建 ArchiveWorker**
+```kotlin
+class ArchiveWorker(context: Context, params: WorkerParameters)
+    : CoroutineWorker(context, params) {
+
+    override suspend fun doWork(): Result {
+        val dataStoreManager = DataStoreManager(applicationContext)
+        val database = AppDatabase.getDatabase(applicationContext)
+        val historyRepository = HistoryRepository(database.historyDao())
+
+        // 执行归档检查和清理逻辑
+        checkAndPerformArchive(dataStoreManager, historyRepository)
+
+        return Result.success()
+    }
+}
+```
+
+**3. 恢复设置 UI**
+- 在 SettingsScreen.kt 中取消注释"归档分界点"设置项
+- 在用户修改时间时，调用 `scheduleDailyArchiveCheck()` 重新注册任务
+
+**实施步骤**：
+
+**Step 1**: 添加 WorkManager 依赖（2 小时）
+- 在 `build.gradle.kts` 中添加 WorkManager 依赖
+- 同步项目
+
+**Step 2**: 实现 ArchiveWorker（4 小时）
+- 创建 `ArchiveWorker.kt`
+- 提取 MainActivity 中的归档逻辑为可复用函数
+- 在 Worker 中调用归档逻辑
+
+**Step 3**: 实现任务调度逻辑（4 小时）
+- 创建 `ArchiveScheduler.kt` 工具类
+- 实现 `scheduleDailyArchiveCheck()` 函数
+- 处理时间计算和任务注册
+
+**Step 4**: 集成到设置页面（2 小时）
+- 恢复 SettingsScreen.kt 中的归档分界点 UI
+- 在时间选择回调中调用任务调度器
+- 在 MainActivity onCreate 中初始化任务（如果已启用）
+
+**Step 5**: 测试和验证（4 小时）
+- 单元测试：时间计算逻辑
+- 集成测试：设置不同时间点，验证任务触发
+- 边缘情况测试：跨天、时区变化、应用更新等
+
+**预期收益**：
+- ✅ 用户可自定义归档时间点（如凌晨 4:00 避免睡眠时段）
+- ✅ 归档在指定时间点主动触发，不依赖用户操作
+- ✅ 符合 Android 后台任务最佳实践
+- ✅ 提升用户体验和应用灵活性
+
+**工作量估算**：
+- **总时间**：16 小时（约 2-3 天）
+- **难度**：中等（需要理解 WorkManager API 和时间调度逻辑）
+
+**待确认问题**：
+- [ ] 是否需要处理用户修改系统时间的情况？
+- [ ] 是否需要在通知栏显示归档结果？
+- [ ] WorkManager 的最低 SDK 要求是否兼容（需要 API 14+，当前项目 minSdk 24 满足）
+
+---
+
 **📝 重要提醒**: 完成每个 Phase 后，请务必：
 1. 更新 CLAUDE.md 中对应 Phase 的完成状态（添加 ✅ 标记）
 2. 更新 TODO.md 中的进度追踪

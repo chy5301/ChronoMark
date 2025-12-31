@@ -134,7 +134,7 @@ fun SettingsScreen(
                 // 自动归档开关
                 SettingsSwitchItem(
                     title = "自动归档",
-                    description = "在分界点自动将事件记录归档到历史",
+                    description = "跨天时自动将事件记录归档到历史（固定00:00分界点）",
                     checked = autoArchiveEnabled,
                     onCheckedChange = { enabled ->
                         coroutineScope.launch {
@@ -144,6 +144,9 @@ fun SettingsScreen(
                     }
                 )
 
+                // TODO: 归档分界点功能等待修复后启用（方案C - WorkManager定时任务）
+                // 当前使用固定00:00分界点，相关代码已保留待后续启用
+                /*
                 HorizontalDivider()
 
                 // 归档分界点时间选择器
@@ -157,6 +160,7 @@ fun SettingsScreen(
                     ),
                     onClick = { showBoundaryTimeDialog = true }
                 )
+                */
 
                 HorizontalDivider()
 

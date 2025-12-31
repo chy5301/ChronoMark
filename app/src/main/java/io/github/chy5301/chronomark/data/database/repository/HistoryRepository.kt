@@ -275,12 +275,16 @@ class HistoryRepository(
                 return Result.success(Unit)
             }
 
+            // 至少保留 2 天的数据（今天 + 昨天），避免删除刚归档的数据
+            // 即使用户设置为 0 天或 1 天，也要保护刚归档的数据
+            val actualRetentionDays = maxOf(retentionDays, 2)
+
             val cutoffDate = LocalDate.now()
-                .minusDays(retentionDays.toLong())
+                .minusDays(actualRetentionDays.toLong())
                 .toString()
 
             historyDao.deleteSessionsBeforeDate(cutoffDate)
-            Log.i(TAG, "Cleaned up data before $cutoffDate")
+            Log.i(TAG, "Cleaned up data before $cutoffDate (retention: $retentionDays days, actual: $actualRetentionDays days)")
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to cleanup old data", e)

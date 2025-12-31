@@ -81,10 +81,61 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
+     * Activity 从后台恢复到前台时触发
+     * 检查日期是否变化，如果变化则触发归档检查
+     */
+    override fun onResume() {
+        super.onResume()
+
+        lifecycleScope.launch {
+            // 读取上次检查日期
+            val lastCheckDate = dataStoreManager.lastArchiveCheckDateFlow.first()
+            val today = LocalDate.now()
+
+            // 如果日期变化了，触发归档检查
+            if (lastCheckDate.isNotEmpty()) {
+                try {
+                    val lastDate = LocalDate.parse(lastCheckDate)
+                    if (today.isAfter(lastDate)) {
+                        Log.i(TAG, "Date changed detected in onResume, triggering archive check")
+                        checkAndCleanupOldData()
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to parse lastCheckDate in onResume: $lastCheckDate", e)
+                }
+            }
+        }
+    }
+
+    /**
      * 启动时清理旧数据并检查是否需要归档
      */
     private suspend fun checkAndCleanupOldData() {
-        // 1. 清理旧数据（基于保留天数设置）
+        // 1. 先执行自动归档（必须在清理之前，避免刚归档的数据被立即删除）
+        val autoArchiveEnabled = dataStoreManager.autoArchiveEnabledFlow.first()
+        if (autoArchiveEnabled) {
+            val lastCheckDate = dataStoreManager.lastArchiveCheckDateFlow.first()
+            val today = LocalDate.now()
+
+            // TODO: 方案B临时简化 - 固定使用00:00作为分界点
+            // 未来需实现方案C：使用WorkManager在自定义boundary时间点主动触发归档
+            // 相关代码已保留在DataStoreManager和SettingsScreen中，等待启用
+            if (shouldArchive(lastCheckDate, today)) {
+                Log.i(TAG, "Archive conditions met, starting auto-archive")
+                performAutoArchive()
+                // 更新最后检查日期
+                dataStoreManager.saveLastArchiveCheckDate(today.toString())
+                    .onFailure { e ->
+                        Log.e(TAG, "Failed to update last archive check date", e)
+                    }
+            } else {
+                Log.i(TAG, "Archive conditions not met, skipping archive")
+            }
+        } else {
+            Log.i(TAG, "Auto-archive is disabled, skipping archive check")
+        }
+
+        // 2. 清理过期的旧数据（在归档之后执行，避免删除刚归档的数据）
         val retentionDays = dataStoreManager.historyRetentionDaysFlow.first()
         historyRepository.cleanupOldData(retentionDays)
             .onSuccess {
@@ -94,50 +145,18 @@ class MainActivity : ComponentActivity() {
                 // 清理失败不影响应用启动，只记录日志
                 Log.w(TAG, "Cleanup failed but app continues", e)
             }
-
-        // 2. 检查是否需要自动归档事件记录
-        val autoArchiveEnabled = dataStoreManager.autoArchiveEnabledFlow.first()
-        if (!autoArchiveEnabled) {
-            Log.i(TAG, "Auto-archive is disabled, skipping archive check")
-            return
-        }
-
-        val lastCheckDate = dataStoreManager.lastArchiveCheckDateFlow.first()
-        val today = LocalDate.now()
-        val now = LocalDateTime.now()
-        val currentTimeInMinutes = now.hour * 60 + now.minute
-
-        val boundaryHour = dataStoreManager.archiveBoundaryHourFlow.first()
-        val boundaryMinute = dataStoreManager.archiveBoundaryMinuteFlow.first()
-        val boundaryTimeInMinutes = boundaryHour * 60 + boundaryMinute
-
-        if (shouldArchive(lastCheckDate, today, currentTimeInMinutes, boundaryTimeInMinutes)) {
-            Log.i(TAG, "Archive conditions met, starting auto-archive")
-            performAutoArchive()
-            // 更新最后检查日期
-            dataStoreManager.saveLastArchiveCheckDate(today.toString())
-                .onFailure { e ->
-                    Log.e(TAG, "Failed to update last archive check date", e)
-                }
-        } else {
-            Log.i(TAG, "Archive conditions not met, skipping archive")
-        }
     }
 
     /**
-     * 判断是否需要归档
+     * 判断是否需要归档（方案B简化版本）
      *
      * @param lastCheckDate 上次检查日期（yyyy-MM-dd）
      * @param currentDate 当前日期
-     * @param currentTimeInMinutes 当前时间（分钟数，0-1439）
-     * @param boundaryTimeInMinutes 分界点时间（分钟数，0-1439）
      * @return 是否需要归档
      */
     private suspend fun shouldArchive(
         lastCheckDate: String,
-        currentDate: LocalDate,
-        currentTimeInMinutes: Int,
-        boundaryTimeInMinutes: Int
+        currentDate: LocalDate
     ): Boolean {
         // 首次使用，初始化为当前日期，不触发归档
         if (lastCheckDate.isEmpty()) {
@@ -158,14 +177,10 @@ class MainActivity : ComponentActivity() {
             return false
         }
 
-        // 日期变化且已过分界点
+        // 方案B简化逻辑：只要日期变化就归档（固定00:00分界点）
         if (currentDate.isAfter(lastDate)) {
-            val shouldArchive = currentTimeInMinutes >= boundaryTimeInMinutes
-            Log.i(
-                TAG,
-                "Date changed from $lastDate to $currentDate, current time: $currentTimeInMinutes, boundary: $boundaryTimeInMinutes, should archive: $shouldArchive"
-            )
-            return shouldArchive
+            Log.i(TAG, "Date changed from $lastDate to $currentDate, will archive")
+            return true
         }
 
         return false

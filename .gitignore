@@ -35,6 +35,7 @@ proguard/
 # Logs & profiling
 *.log
 *.hprof
+logs/
 
 # Keystore files
 *.jks
