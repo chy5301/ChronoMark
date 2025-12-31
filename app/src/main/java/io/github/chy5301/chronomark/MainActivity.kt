@@ -17,6 +17,7 @@ import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.ThemeMode
 import io.github.chy5301.chronomark.ui.screen.MainScreen
 import io.github.chy5301.chronomark.ui.theme.ChronoMarkTheme
+import io.github.chy5301.chronomark.util.ArchiveUtils
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -82,26 +83,31 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Activity 从后台恢复到前台时触发
-     * 检查日期是否变化，如果变化则触发归档检查
+     * 检查逻辑日期是否变化，如果变化则触发归档检查
      */
     override fun onResume() {
         super.onResume()
 
         lifecycleScope.launch {
-            // 读取上次检查日期
-            val lastCheckDate = dataStoreManager.lastArchiveCheckDateFlow.first()
-            val today = LocalDate.now()
+            // 读取上次检查时间戳和归档设置
+            val lastCheckTimestamp = dataStoreManager.lastArchiveCheckTimestampFlow.first()
+            val currentTimestamp = System.currentTimeMillis()
+            val boundaryHour = dataStoreManager.archiveBoundaryHourFlow.first()
+            val boundaryMinute = dataStoreManager.archiveBoundaryMinuteFlow.first()
 
-            // 如果日期变化了，触发归档检查
-            if (lastCheckDate.isNotEmpty()) {
+            // 如果逻辑日期变化了，触发归档检查
+            if (lastCheckTimestamp != 0L) {
                 try {
-                    val lastDate = LocalDate.parse(lastCheckDate)
-                    if (today.isAfter(lastDate)) {
-                        Log.i(TAG, "Date changed detected in onResume, triggering archive check")
+                    val boundaryTime = ArchiveUtils.createBoundaryTime(boundaryHour, boundaryMinute)
+                    val lastLogicalDate = ArchiveUtils.getLogicalDate(lastCheckTimestamp, boundaryTime)
+                    val currentLogicalDate = ArchiveUtils.getLogicalDate(currentTimestamp, boundaryTime)
+
+                    if (currentLogicalDate.isAfter(lastLogicalDate)) {
+                        Log.i(TAG, "Logical date changed detected in onResume, triggering archive check")
                         checkAndCleanupOldData()
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Failed to parse lastCheckDate in onResume: $lastCheckDate", e)
+                    Log.w(TAG, "Failed to check logical date in onResume", e)
                 }
             }
         }
@@ -114,19 +120,18 @@ class MainActivity : ComponentActivity() {
         // 1. 先执行自动归档（必须在清理之前，避免刚归档的数据被立即删除）
         val autoArchiveEnabled = dataStoreManager.autoArchiveEnabledFlow.first()
         if (autoArchiveEnabled) {
-            val lastCheckDate = dataStoreManager.lastArchiveCheckDateFlow.first()
-            val today = LocalDate.now()
+            val lastCheckTimestamp = dataStoreManager.lastArchiveCheckTimestampFlow.first()
+            val currentTimestamp = System.currentTimeMillis()
+            val boundaryHour = dataStoreManager.archiveBoundaryHourFlow.first()
+            val boundaryMinute = dataStoreManager.archiveBoundaryMinuteFlow.first()
 
-            // TODO: 方案B临时简化 - 固定使用00:00作为分界点
-            // 未来需实现方案C：使用WorkManager在自定义boundary时间点主动触发归档
-            // 相关代码已保留在DataStoreManager和SettingsScreen中，等待启用
-            if (shouldArchive(lastCheckDate, today)) {
+            if (shouldArchive(lastCheckTimestamp, currentTimestamp, boundaryHour, boundaryMinute)) {
                 Log.i(TAG, "Archive conditions met, starting auto-archive")
-                performAutoArchive()
-                // 更新最后检查日期
-                dataStoreManager.saveLastArchiveCheckDate(today.toString())
+                performAutoArchive(boundaryHour, boundaryMinute)
+                // 更新最后检查时间戳
+                dataStoreManager.saveLastArchiveCheckTimestamp(currentTimestamp)
                     .onFailure { e ->
-                        Log.e(TAG, "Failed to update last archive check date", e)
+                        Log.e(TAG, "Failed to update last archive check timestamp", e)
                     }
             } else {
                 Log.i(TAG, "Archive conditions not met, skipping archive")
@@ -148,38 +153,48 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * 判断是否需要归档（方案B简化版本）
+     * 判断是否需要归档（基于逻辑日期）
      *
-     * @param lastCheckDate 上次检查日期（yyyy-MM-dd）
-     * @param currentDate 当前日期
+     * @param lastCheckTimestamp 上次检查的时间戳（毫秒）
+     * @param currentTimestamp 当前时间戳（毫秒）
+     * @param boundaryHour 分界点小时（0-23）
+     * @param boundaryMinute 分界点分钟（0-59）
      * @return 是否需要归档
      */
     private suspend fun shouldArchive(
-        lastCheckDate: String,
-        currentDate: LocalDate
+        lastCheckTimestamp: Long,
+        currentTimestamp: Long,
+        boundaryHour: Int,
+        boundaryMinute: Int
     ): Boolean {
-        // 首次使用，初始化为当前日期，不触发归档
-        if (lastCheckDate.isEmpty()) {
-            dataStoreManager.saveLastArchiveCheckDate(currentDate.toString())
+        // 首次使用，初始化为当前时间戳，不触发归档
+        if (lastCheckTimestamp == 0L) {
+            dataStoreManager.saveLastArchiveCheckTimestamp(currentTimestamp)
                 .onFailure { e ->
-                    Log.e(TAG, "Failed to initialize last archive check date", e)
+                    Log.e(TAG, "Failed to initialize last archive check timestamp", e)
                 }
-            Log.i(TAG, "First time using app, initialized last check date to $currentDate")
+            Log.i(TAG, "First time using app, initialized last check timestamp")
             return false
         }
 
-        val lastDate = try {
-            LocalDate.parse(lastCheckDate)
-        } catch (e: Exception) {
-            // 日期格式错误，重置为当前日期
-            Log.w(TAG, "Invalid last check date format: $lastCheckDate, resetting to today", e)
-            dataStoreManager.saveLastArchiveCheckDate(currentDate.toString())
+        // 系统时间回退检测
+        if (currentTimestamp < lastCheckTimestamp) {
+            Log.w(TAG, "System time rollback detected, resetting timestamp without archiving")
+            dataStoreManager.saveLastArchiveCheckTimestamp(currentTimestamp)
+                .onFailure { e ->
+                    Log.e(TAG, "Failed to reset timestamp after time rollback", e)
+                }
             return false
         }
 
-        // 方案B简化逻辑：只要日期变化就归档（固定00:00分界点）
-        if (currentDate.isAfter(lastDate)) {
-            Log.i(TAG, "Date changed from $lastDate to $currentDate, will archive")
+        // 计算逻辑日期
+        val boundaryTime = ArchiveUtils.createBoundaryTime(boundaryHour, boundaryMinute)
+        val lastLogicalDate = ArchiveUtils.getLogicalDate(lastCheckTimestamp, boundaryTime)
+        val currentLogicalDate = ArchiveUtils.getLogicalDate(currentTimestamp, boundaryTime)
+
+        // 逻辑日期变化即触发归档
+        if (currentLogicalDate.isAfter(lastLogicalDate)) {
+            Log.i(TAG, "Logical date changed from $lastLogicalDate to $currentLogicalDate, will archive")
             return true
         }
 
@@ -187,9 +202,12 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * 执行自动归档操作
+     * 执行自动归档操作（基于逻辑日期分组）
+     *
+     * @param boundaryHour 分界点小时
+     * @param boundaryMinute 分界点分钟
      */
-    private suspend fun performAutoArchive() {
+    private suspend fun performAutoArchive(boundaryHour: Int, boundaryMinute: Int) {
         // 读取事件记录
         val records = dataStoreManager.eventRecordsFlow.first()
         if (records.isEmpty()) {
@@ -199,21 +217,48 @@ class MainActivity : ComponentActivity() {
 
         Log.i(TAG, "Starting auto archive for ${records.size} event records")
 
-        // 归档到 Room 数据库
-        historyRepository.archiveEventRecords(records)
-            .onSuccess {
-                Log.i(TAG, "Archive successful, clearing workspace")
+        // 计算分界点时间和当前逻辑日期
+        val boundaryTime = ArchiveUtils.createBoundaryTime(boundaryHour, boundaryMinute)
+        val currentTimestamp = System.currentTimeMillis()
+        val today = ArchiveUtils.getLogicalDate(currentTimestamp, boundaryTime)
 
-                // 清空 DataStore 工作区
-                dataStoreManager.clearEventRecords()
-                    .onFailure { e ->
-                        Log.e(TAG, "Failed to clear workspace after archive", e)
+        // 按逻辑日期分组记录
+        val recordsByLogicalDate = records.groupBy { record ->
+            ArchiveUtils.getLogicalDate(record.wallClockTime, boundaryTime)
+        }
+
+        Log.i(TAG, "Grouped into ${recordsByLogicalDate.size} logical dates")
+
+        // 分别归档每个逻辑日期的记录
+        var totalArchived = 0
+        var recordsToKeep = emptyList<io.github.chy5301.chronomark.data.model.TimeRecord>()
+
+        recordsByLogicalDate.forEach { (logicalDate, dateRecords) ->
+            if (logicalDate.isBefore(today)) {
+                // 归档到历史
+                Log.i(TAG, "Archiving ${dateRecords.size} records for $logicalDate")
+                historyRepository.archiveEventRecordsByDate(logicalDate.toString(), dateRecords)
+                    .onSuccess {
+                        totalArchived += dateRecords.size
+                        Log.i(TAG, "Successfully archived ${dateRecords.size} records for $logicalDate")
                     }
+                    .onFailure { e ->
+                        Log.e(TAG, "Failed to archive records for $logicalDate", e)
+                    }
+            } else {
+                // 保留今天的记录在工作区
+                Log.i(TAG, "Keeping ${dateRecords.size} records for today ($logicalDate)")
+                recordsToKeep = dateRecords
+            }
+        }
 
-                Log.i(TAG, "Auto archive completed: ${records.size} records archived")
+        // 更新工作区（只保留今天的记录）
+        dataStoreManager.saveEventRecords(recordsToKeep)
+            .onSuccess {
+                Log.i(TAG, "Auto archive completed: $totalArchived records archived, ${recordsToKeep.size} kept in workspace")
             }
             .onFailure { e ->
-                Log.e(TAG, "Archive failed", e)
+                Log.e(TAG, "Failed to update workspace after archive", e)
             }
     }
 }

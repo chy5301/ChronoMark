@@ -27,11 +27,58 @@ class HistoryRepository(
     // ========== 归档操作 ==========
 
     /**
-     * 归档事件模式记录
+     * 归档事件模式记录到指定日期
      *
+     * @param date 归档日期（格式：yyyy-MM-dd）
      * @param records 时间记录列表
      * @return Result<Unit> 成功或失败
      */
+    suspend fun archiveEventRecordsByDate(date: String, records: List<TimeRecord>): Result<Unit> {
+        return try {
+            if (records.isEmpty()) {
+                return Result.failure(Exception("No records to archive"))
+            }
+
+            val session = HistorySessionEntity(
+                id = UUID.randomUUID().toString(),
+                date = date,
+                sessionType = SessionType.EVENT,
+                title = "",  // 事件模式无标题
+                createdAt = System.currentTimeMillis()
+            )
+
+            val recordEntities = records.map { record ->
+                TimeRecordEntity(
+                    id = record.id,
+                    sessionId = session.id,
+                    index = record.index,
+                    wallClockTime = record.wallClockTime,
+                    elapsedTimeNanos = record.elapsedTimeNanos,
+                    splitTimeNanos = record.splitTimeNanos,
+                    note = record.note
+                )
+            }
+
+            historyDao.archiveSession(session, recordEntities)
+            Log.i(TAG, "Archived ${records.size} event records for $date")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to archive event records", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 归档事件模式记录（旧版本，已废弃）
+     *
+     * @param records 时间记录列表
+     * @return Result<Unit> 成功或失败
+     * @deprecated 使用 archiveEventRecordsByDate() 替代，该方法假设所有记录都归档到昨天
+     */
+    @Deprecated(
+        message = "使用 archiveEventRecordsByDate() 替代，该方法假设所有记录都归档到昨天",
+        replaceWith = ReplaceWith("archiveEventRecordsByDate(date, records)")
+    )
     suspend fun archiveEventRecords(records: List<TimeRecord>): Result<Unit> {
         return try {
             if (records.isEmpty()) {
