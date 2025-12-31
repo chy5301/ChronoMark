@@ -69,54 +69,6 @@ class HistoryRepository(
     }
 
     /**
-     * 归档事件模式记录（旧版本，已废弃）
-     *
-     * @param records 时间记录列表
-     * @return Result<Unit> 成功或失败
-     * @deprecated 使用 archiveEventRecordsByDate() 替代，该方法假设所有记录都归档到昨天
-     */
-    @Deprecated(
-        message = "使用 archiveEventRecordsByDate() 替代，该方法假设所有记录都归档到昨天",
-        replaceWith = ReplaceWith("archiveEventRecordsByDate(date, records)")
-    )
-    suspend fun archiveEventRecords(records: List<TimeRecord>): Result<Unit> {
-        return try {
-            if (records.isEmpty()) {
-                return Result.failure(Exception("No records to archive"))
-            }
-
-            // 归档到昨天的日期
-            val yesterday = LocalDate.now().minusDays(1).toString()
-            val session = HistorySessionEntity(
-                id = UUID.randomUUID().toString(),
-                date = yesterday,
-                sessionType = SessionType.EVENT,
-                title = "",  // 事件模式无标题
-                createdAt = System.currentTimeMillis()
-            )
-
-            val recordEntities = records.map { record ->
-                TimeRecordEntity(
-                    id = record.id,
-                    sessionId = session.id,
-                    index = record.index,
-                    wallClockTime = record.wallClockTime,
-                    elapsedTimeNanos = record.elapsedTimeNanos,
-                    splitTimeNanos = record.splitTimeNanos,
-                    note = record.note
-                )
-            }
-
-            historyDao.archiveSession(session, recordEntities)
-            Log.i(TAG, "Archived ${records.size} event records for $yesterday")
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to archive event records", e)
-            Result.failure(e)
-        }
-    }
-
-    /**
      * 归档秒表模式记录
      *
      * @param records 时间记录列表
@@ -331,7 +283,10 @@ class HistoryRepository(
                 .toString()
 
             historyDao.deleteSessionsBeforeDate(cutoffDate)
-            Log.i(TAG, "Cleaned up data before $cutoffDate (retention: $retentionDays days, actual: $actualRetentionDays days)")
+            Log.i(
+                TAG,
+                "Cleaned up data before $cutoffDate (retention: $retentionDays days, actual: $actualRetentionDays days)"
+            )
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to cleanup old data", e)

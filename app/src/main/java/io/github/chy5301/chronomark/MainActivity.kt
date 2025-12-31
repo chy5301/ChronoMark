@@ -20,8 +20,6 @@ import io.github.chy5301.chronomark.ui.theme.ChronoMarkTheme
 import io.github.chy5301.chronomark.util.ArchiveUtils
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.time.LocalDate
-import java.time.LocalDateTime
 
 class MainActivity : ComponentActivity() {
 
@@ -99,11 +97,16 @@ class MainActivity : ComponentActivity() {
             if (lastCheckTimestamp != 0L) {
                 try {
                     val boundaryTime = ArchiveUtils.createBoundaryTime(boundaryHour, boundaryMinute)
-                    val lastLogicalDate = ArchiveUtils.getLogicalDate(lastCheckTimestamp, boundaryTime)
-                    val currentLogicalDate = ArchiveUtils.getLogicalDate(currentTimestamp, boundaryTime)
+                    val lastLogicalDate =
+                        ArchiveUtils.getLogicalDate(lastCheckTimestamp, boundaryTime)
+                    val currentLogicalDate =
+                        ArchiveUtils.getLogicalDate(currentTimestamp, boundaryTime)
 
                     if (currentLogicalDate.isAfter(lastLogicalDate)) {
-                        Log.i(TAG, "Logical date changed detected in onResume, triggering archive check")
+                        Log.i(
+                            TAG,
+                            "Logical date changed detected in onResume, triggering archive check"
+                        )
                         checkAndCleanupOldData()
                     }
                 } catch (e: Exception) {
@@ -194,7 +197,10 @@ class MainActivity : ComponentActivity() {
 
         // 逻辑日期变化即触发归档
         if (currentLogicalDate.isAfter(lastLogicalDate)) {
-            Log.i(TAG, "Logical date changed from $lastLogicalDate to $currentLogicalDate, will archive")
+            Log.i(
+                TAG,
+                "Logical date changed from $lastLogicalDate to $currentLogicalDate, will archive"
+            )
             return true
         }
 
@@ -240,7 +246,10 @@ class MainActivity : ComponentActivity() {
                 historyRepository.archiveEventRecordsByDate(logicalDate.toString(), dateRecords)
                     .onSuccess {
                         totalArchived += dateRecords.size
-                        Log.i(TAG, "Successfully archived ${dateRecords.size} records for $logicalDate")
+                        Log.i(
+                            TAG,
+                            "Successfully archived ${dateRecords.size} records for $logicalDate"
+                        )
                     }
                     .onFailure { e ->
                         Log.e(TAG, "Failed to archive records for $logicalDate", e)
@@ -255,7 +264,10 @@ class MainActivity : ComponentActivity() {
         // 更新工作区（只保留今天的记录）
         dataStoreManager.saveEventRecords(recordsToKeep)
             .onSuccess {
-                Log.i(TAG, "Auto archive completed: $totalArchived records archived, ${recordsToKeep.size} kept in workspace")
+                Log.i(
+                    TAG,
+                    "Auto archive completed: $totalArchived records archived, ${recordsToKeep.size} kept in workspace"
+                )
             }
             .onFailure { e ->
                 Log.e(TAG, "Failed to update workspace after archive", e)

@@ -38,7 +38,8 @@ class DataStoreManager(private val context: Context) {
         private val KEY_ARCHIVE_BOUNDARY_HOUR = intPreferencesKey("archive_boundary_hour")
         private val KEY_ARCHIVE_BOUNDARY_MINUTE = intPreferencesKey("archive_boundary_minute")
         private val KEY_AUTO_ARCHIVE_ENABLED = booleanPreferencesKey("auto_archive_enabled")
-        private val KEY_LAST_ARCHIVE_CHECK_TIMESTAMP = longPreferencesKey("last_archive_check_timestamp")
+        private val KEY_LAST_ARCHIVE_CHECK_TIMESTAMP =
+            longPreferencesKey("last_archive_check_timestamp")
         private val KEY_HISTORY_RETENTION_DAYS = intPreferencesKey("history_retention_days")
 
         // 秒表模式数据
