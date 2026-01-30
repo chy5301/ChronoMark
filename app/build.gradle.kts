@@ -6,16 +6,22 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-// 读取签名配置
+// 读取签名配置（支持本地和 CI 双模式）
 import java.util.Properties
 import java.io.FileInputStream
 
 val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties()
-val hasKeystore = keystorePropertiesFile.exists()
-if (hasKeystore) {
+val hasLocalKeystore = keystorePropertiesFile.exists()
+if (hasLocalKeystore) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
+
+// CI 环境：从环境变量读取
+val ciKeyAlias = System.getenv("SIGNING_KEY_ALIAS")
+val ciKeyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+val ciStorePassword = System.getenv("SIGNING_STORE_PASSWORD")
+val hasCiSigning = !ciKeyAlias.isNullOrEmpty()
 
 android {
     namespace = "io.github.chy5301.chronomark"
@@ -40,12 +46,21 @@ android {
 
     // 签名配置
     signingConfigs {
-        if (hasKeystore) {
+        if (hasLocalKeystore) {
+            // 本地开发：从 keystore.properties 读取
             create("release") {
                 storeFile = rootProject.file(keystoreProperties["storeFile"].toString())
                 storePassword = keystoreProperties["storePassword"].toString()
                 keyAlias = keystoreProperties["keyAlias"].toString()
                 keyPassword = keystoreProperties["keyPassword"].toString()
+            }
+        } else if (hasCiSigning) {
+            // CI 环境：从环境变量读取
+            create("release") {
+                storeFile = file("release.keystore")
+                storePassword = ciStorePassword
+                keyAlias = ciKeyAlias
+                keyPassword = ciKeyPassword
             }
         }
     }
@@ -54,8 +69,8 @@ android {
         release {
             // 启用 R8 代码混淆
             isMinifyEnabled = true
-            // 如果存在签名配置则使用
-            if (hasKeystore) {
+            // 如果存在签名配置则使用（本地或 CI）
+            if (hasLocalKeystore || hasCiSigning) {
                 signingConfig = signingConfigs.getByName("release")
             }
             proguardFiles(
