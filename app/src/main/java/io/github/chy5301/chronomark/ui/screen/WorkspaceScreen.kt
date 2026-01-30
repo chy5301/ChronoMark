@@ -1,5 +1,8 @@
 package io.github.chy5301.chronomark.ui.screen
 
+import android.app.Activity
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
@@ -13,7 +16,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.chy5301.chronomark.data.DataStoreManager
@@ -63,6 +68,21 @@ fun WorkspaceScreen(
 
     // 读取震动反馈设置
     val vibrationEnabled by dataStoreManager.vibrationEnabledFlow.collectAsState(initial = true)
+
+    // 双击返回退出逻辑
+    var lastBackPressTime by remember { mutableStateOf(0L) }
+
+    BackHandler {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastBackPressTime < 2000L) {
+            // 2秒内再次按下，退出应用
+            (context as? Activity)?.finish()
+        } else {
+            // 第一次按下或超时，显示提示
+            lastBackPressTime = currentTime
+            Toast.makeText(context, "再按一次退出", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Scaffold(
         topBar = {
