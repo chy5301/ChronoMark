@@ -13,6 +13,11 @@ lifecycleViewmodel = "2.8.0"
 datastore = "1.1.1"
 kotlinxSerialization = "1.7.3"
 room = "2.6.1"
+# Testing
+coroutinesTest = "1.7.3"
+mockk = "1.13.12"
+turbine = "1.0.0"
+archCoreTesting = "2.2.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -36,6 +41,12 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
+# Testing
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }
+mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
+turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
+androidx-arch-core-testing = { group = "androidx.arch.core", name = "core-testing", version.ref = "archCoreTesting" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
