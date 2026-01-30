@@ -96,12 +96,6 @@ jobs:
           name: release-apk
           path: ./artifacts
 
-      - name: Download mapping artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: mapping
-          path: ./mapping
-
       - name: Extract changelog for version
         run: |
           VERSION=${{ env.VERSION }}
@@ -121,9 +115,6 @@ jobs:
             echo "Release ${{ env.TAG_NAME }}" > release_notes.md
           fi
 
-      - name: Compress mapping.txt
-        run: gzip -c ./mapping/mapping.txt > ./mapping.txt.gz
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -131,8 +122,6 @@ jobs:
           body_path: release_notes.md
           draft: false
           prerelease: false
-          files: |
-            ./artifacts/ChronoMark-${{ env.TAG_NAME }}.apk
-            ./mapping.txt.gz
+          files: ./artifacts/ChronoMark-${{ env.TAG_NAME }}.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
