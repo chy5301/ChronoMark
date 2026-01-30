@@ -38,8 +38,6 @@ class DataStoreManager(private val context: Context) {
         private val KEY_ARCHIVE_BOUNDARY_HOUR = intPreferencesKey("archive_boundary_hour")
         private val KEY_ARCHIVE_BOUNDARY_MINUTE = intPreferencesKey("archive_boundary_minute")
         private val KEY_AUTO_ARCHIVE_ENABLED = booleanPreferencesKey("auto_archive_enabled")
-        private val KEY_LAST_ARCHIVE_CHECK_TIMESTAMP =
-            longPreferencesKey("last_archive_check_timestamp")
         private val KEY_HISTORY_RETENTION_DAYS = intPreferencesKey("history_retention_days")
 
         // 秒表模式数据
@@ -283,37 +281,6 @@ class DataStoreManager(private val context: Context) {
         }
         .map { preferences ->
             preferences[KEY_AUTO_ARCHIVE_ENABLED] ?: true  // 默认启用
-        }
-
-    /**
-     * 保存上次归档检查时间戳
-     * @param timestamp 毫秒级时间戳
-     * @return Result.success(Unit) 或 Result.failure(exception)
-     */
-    suspend fun saveLastArchiveCheckTimestamp(timestamp: Long): Result<Unit> {
-        return try {
-            context.dataStore.edit { preferences ->
-                preferences[KEY_LAST_ARCHIVE_CHECK_TIMESTAMP] = timestamp
-            }
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    /**
-     * 读取上次归档检查时间戳
-     */
-    val lastArchiveCheckTimestampFlow: Flow<Long> = context.dataStore.data
-        .catch { exception ->
-            if (exception is IOException) {
-                emit(androidx.datastore.preferences.core.emptyPreferences())
-            } else {
-                throw exception
-            }
-        }
-        .map { preferences ->
-            preferences[KEY_LAST_ARCHIVE_CHECK_TIMESTAMP] ?: 0L  // 0L 表示首次使用
         }
 
     /**

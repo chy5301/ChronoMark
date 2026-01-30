@@ -122,6 +122,162 @@ class HistoryRepository(
         }
     }
 
+    // ========== 实时同步操作（事件模式）==========
+
+    /**
+     * 按日期查询事件记录（用于加载今天的记录）
+     *
+     * @param date 日期字符串（格式：yyyy-MM-dd）
+     * @return 时间记录列表（领域模型）
+     */
+    suspend fun getEventRecordsByDate(date: String): List<TimeRecord> {
+        return try {
+            historyDao.getEventRecordsByDate(date).map { entity ->
+                TimeRecord(
+                    id = entity.id,
+                    index = entity.index,
+                    wallClockTime = entity.wallClockTime,
+                    elapsedTimeNanos = entity.elapsedTimeNanos,
+                    splitTimeNanos = entity.splitTimeNanos,
+                    note = entity.note
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get event records by date", e)
+            emptyList()
+        }
+    }
+
+    /**
+     * 插入单条事件记录（实时同步使用）
+     * 如果当天没有会话，会自动创建
+     *
+     * @param date 日期字符串（格式：yyyy-MM-dd）
+     * @param record 时间记录
+     * @return Result<Unit> 成功或失败
+     */
+    suspend fun insertEventRecord(date: String, record: TimeRecord): Result<Unit> {
+        return try {
+            // 获取或创建当天的事件会话
+            var session = historyDao.getEventSessionByDate(date)
+            if (session == null) {
+                session = HistorySessionEntity(
+                    id = UUID.randomUUID().toString(),
+                    date = date,
+                    sessionType = SessionType.EVENT,
+                    title = "",
+                    createdAt = System.currentTimeMillis()
+                )
+                historyDao.insertSession(session)
+                Log.i(TAG, "Created new event session for $date")
+            }
+
+            // 插入记录
+            val entity = TimeRecordEntity(
+                id = record.id,
+                sessionId = session.id,
+                index = record.index,
+                wallClockTime = record.wallClockTime,
+                elapsedTimeNanos = record.elapsedTimeNanos,
+                splitTimeNanos = record.splitTimeNanos,
+                note = record.note
+            )
+            historyDao.insertRecord(entity)
+            Log.d(TAG, "Inserted event record: ${record.id}")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to insert event record", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 批量插入事件记录（数据迁移使用）
+     *
+     * @param date 日期字符串（格式：yyyy-MM-dd）
+     * @param records 时间记录列表
+     * @return Result<Unit> 成功或失败
+     */
+    suspend fun insertEventRecords(date: String, records: List<TimeRecord>): Result<Unit> {
+        return try {
+            if (records.isEmpty()) {
+                return Result.success(Unit)
+            }
+
+            // 获取或创建当天的事件会话
+            var session = historyDao.getEventSessionByDate(date)
+            if (session == null) {
+                session = HistorySessionEntity(
+                    id = UUID.randomUUID().toString(),
+                    date = date,
+                    sessionType = SessionType.EVENT,
+                    title = "",
+                    createdAt = System.currentTimeMillis()
+                )
+                historyDao.insertSession(session)
+                Log.i(TAG, "Created new event session for $date (migration)")
+            }
+
+            // 批量插入记录
+            val entities = records.map { record ->
+                TimeRecordEntity(
+                    id = record.id,
+                    sessionId = session.id,
+                    index = record.index,
+                    wallClockTime = record.wallClockTime,
+                    elapsedTimeNanos = record.elapsedTimeNanos,
+                    splitTimeNanos = record.splitTimeNanos,
+                    note = record.note
+                )
+            }
+            historyDao.insertRecords(entities)
+            Log.i(TAG, "Migrated ${records.size} event records for $date")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to migrate event records", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 更新事件记录备注（实时同步使用）
+     *
+     * @param recordId 记录 ID
+     * @param note 新备注
+     * @return Result<Unit> 成功或失败
+     */
+    suspend fun updateEventRecordNote(recordId: String, note: String): Result<Unit> {
+        return updateRecordNote(recordId, note)
+    }
+
+    /**
+     * 删除单条事件记录（实时同步使用）
+     *
+     * @param recordId 记录 ID
+     * @return Result<Unit> 成功或失败
+     */
+    suspend fun deleteEventRecord(recordId: String): Result<Unit> {
+        return deleteRecord(recordId)
+    }
+
+    /**
+     * 删除指定日期的所有事件记录（重置使用）
+     *
+     * @param date 日期字符串
+     * @return Result<Unit> 成功或失败
+     */
+    suspend fun deleteEventRecordsByDate(date: String): Result<Unit> {
+        return try {
+            historyDao.deleteEventRecordsByDate(date)
+            historyDao.deleteEmptyEventSessions()
+            Log.i(TAG, "Deleted event records for $date")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to delete event records by date", e)
+            Result.failure(e)
+        }
+    }
+
     // ========== 查询操作 ==========
 
     /**

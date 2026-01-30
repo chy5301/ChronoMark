@@ -7,6 +7,7 @@ import io.github.chy5301.chronomark.data.DataStoreManager
 import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.EventUiState
 import io.github.chy5301.chronomark.data.model.TimeRecord
+import io.github.chy5301.chronomark.util.ArchiveUtils
 import io.github.chy5301.chronomark.util.ShareHelper
 import io.github.chy5301.chronomark.util.TimeFormatter
 import kotlinx.coroutines.Job
@@ -21,6 +22,9 @@ import kotlinx.coroutines.launch
 
 /**
  * 事件模式 ViewModel
+ *
+ * 实现实时同步：所有记录直接存储到 Room 数据库，
+ * 界面只显示今天逻辑日期的记录。
  */
 class EventViewModel(
     private val dataStoreManager: DataStoreManager,
@@ -41,12 +45,70 @@ class EventViewModel(
     init {
         // 启动墙上时钟更新（始终运行）
         startWallClockTicking()
-        // 加载保存的记录
-        loadSavedRecords()
+        // 迁移遗留数据并加载今天的记录
+        migrateAndLoadRecords()
     }
 
     /**
-     * 记录事件（立即记录当前时间点）
+     * 迁移 DataStore 遗留数据并加载今天的记录
+     */
+    private fun migrateAndLoadRecords() {
+        viewModelScope.launch {
+            // 1. 检查并迁移 DataStore 中的遗留数据
+            val legacyRecords = dataStoreManager.eventRecordsFlow.first()
+            if (legacyRecords.isNotEmpty()) {
+                Log.i(TAG, "Migrating ${legacyRecords.size} legacy records from DataStore")
+                migrateRecordsToRoom(legacyRecords)
+                dataStoreManager.clearEventData()
+                    .onFailure { e ->
+                        Log.e(TAG, "Failed to clear legacy data from DataStore", e)
+                    }
+            }
+
+            // 2. 加载今天的记录
+            loadTodayRecords()
+        }
+    }
+
+    /**
+     * 将记录迁移到 Room（按逻辑日期分组）
+     */
+    private suspend fun migrateRecordsToRoom(records: List<TimeRecord>) {
+        val boundaryHour = dataStoreManager.archiveBoundaryHourFlow.first()
+        val boundaryMinute = dataStoreManager.archiveBoundaryMinuteFlow.first()
+        val boundaryTime = ArchiveUtils.createBoundaryTime(boundaryHour, boundaryMinute)
+
+        // 按逻辑日期分组
+        val grouped = records.groupBy { record ->
+            ArchiveUtils.getLogicalDate(record.wallClockTime, boundaryTime).toString()
+        }
+
+        // 逐日期存入 Room
+        grouped.forEach { (date, dateRecords) ->
+            historyRepository.insertEventRecords(date, dateRecords)
+                .onSuccess {
+                    Log.i(TAG, "Migrated ${dateRecords.size} records for $date")
+                }
+                .onFailure { e ->
+                    Log.e(TAG, "Failed to migrate records for $date", e)
+                }
+        }
+    }
+
+    /**
+     * 加载今天的记录
+     */
+    private suspend fun loadTodayRecords() {
+        val todayDate = getTodayLogicalDate()
+        val records = historyRepository.getEventRecordsByDate(todayDate)
+        _uiState.update {
+            it.copy(records = records)
+        }
+        Log.d(TAG, "Loaded ${records.size} records for today ($todayDate)")
+    }
+
+    /**
+     * 记录事件（直接写入 Room）
      */
     fun recordEvent() {
         val currentWallClockTime = System.currentTimeMillis()
@@ -64,14 +126,23 @@ class EventViewModel(
             note = ""
         )
 
+        // 更新 UI
         _uiState.update {
             it.copy(records = it.records + listOf(newRecord))
         }
-        saveRecords()
+
+        // 写入 Room
+        viewModelScope.launch {
+            val todayDate = getTodayLogicalDate()
+            historyRepository.insertEventRecord(todayDate, newRecord)
+                .onFailure { e ->
+                    Log.e(TAG, "Failed to save record to database", e)
+                }
+        }
     }
 
     /**
-     * 重置所有记录
+     * 重置今天的记录
      */
     fun reset() {
         _uiState.update {
@@ -80,18 +151,19 @@ class EventViewModel(
                 records = emptyList()
             )
         }
-        // 清除保存的数据
+
+        // 删除今天在 Room 中的记录
         viewModelScope.launch {
-            dataStoreManager.clearEventData()
+            val todayDate = getTodayLogicalDate()
+            historyRepository.deleteEventRecordsByDate(todayDate)
                 .onFailure { e ->
-                    // 记录错误，但不影响 UI 状态重置
-                    e.printStackTrace()
+                    Log.e(TAG, "Failed to delete today's records from database", e)
                 }
         }
     }
 
     /**
-     * 更新记录的备注
+     * 更新记录的备注（直接更新 Room）
      */
     fun updateRecordNote(recordId: String, note: String) {
         _uiState.update { state ->
@@ -101,11 +173,18 @@ class EventViewModel(
                 }
             )
         }
-        saveRecords()
+
+        // 更新 Room
+        viewModelScope.launch {
+            historyRepository.updateEventRecordNote(recordId, note)
+                .onFailure { e ->
+                    Log.e(TAG, "Failed to update note in database", e)
+                }
+        }
     }
 
     /**
-     * 删除记录
+     * 删除记录（直接从 Room 删除）
      */
     fun deleteRecord(recordId: String) {
         _uiState.update { state ->
@@ -116,7 +195,14 @@ class EventViewModel(
             }
             state.copy(records = reindexedRecords)
         }
-        saveRecords()
+
+        // 从 Room 删除
+        viewModelScope.launch {
+            historyRepository.deleteEventRecord(recordId)
+                .onFailure { e ->
+                    Log.e(TAG, "Failed to delete record from database", e)
+                }
+        }
     }
 
     /**
@@ -142,18 +228,6 @@ class EventViewModel(
     }
 
     /**
-     * 加载保存的记录
-     */
-    private fun loadSavedRecords() {
-        viewModelScope.launch {
-            val savedRecords = dataStoreManager.eventRecordsFlow.first()
-            _uiState.update {
-                it.copy(records = savedRecords)
-            }
-        }
-    }
-
-    /**
      * 生成分享文本
      */
     fun generateShareText(): String {
@@ -161,19 +235,17 @@ class EventViewModel(
     }
 
     /**
-     * 保存记录
+     * 获取今天的逻辑日期
      */
-    private fun saveRecords() {
-        viewModelScope.launch {
-            dataStoreManager.saveEventRecords(_uiState.value.records)
-                .onFailure { e -> e.printStackTrace() }
-        }
+    private suspend fun getTodayLogicalDate(): String {
+        val boundaryHour = dataStoreManager.archiveBoundaryHourFlow.first()
+        val boundaryMinute = dataStoreManager.archiveBoundaryMinuteFlow.first()
+        val boundaryTime = ArchiveUtils.createBoundaryTime(boundaryHour, boundaryMinute)
+        return ArchiveUtils.getLogicalDate(System.currentTimeMillis(), boundaryTime).toString()
     }
 
     override fun onCleared() {
         super.onCleared()
-        // 保存记录
-        saveRecords()
         wallClockJob?.cancel()
         wallClockJob = null
     }

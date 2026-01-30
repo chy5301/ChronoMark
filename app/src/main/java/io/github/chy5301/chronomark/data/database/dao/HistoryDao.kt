@@ -37,6 +37,37 @@ interface HistoryDao {
     fun getSessionsByDate(date: String, sessionType: SessionType): Flow<List<HistorySessionEntity>>
 
     /**
+     * 获取指定日期的事件会话（用于实时同步）
+     *
+     * @param date 日期字符串（格式：yyyy-MM-dd）
+     * @return 事件会话实体，如果不存在则返回 null
+     */
+    @Query(
+        """
+        SELECT * FROM history_sessions
+        WHERE date = :date AND session_type = 'EVENT'
+        LIMIT 1
+    """
+    )
+    suspend fun getEventSessionByDate(date: String): HistorySessionEntity?
+
+    /**
+     * 按日期查询事件记录（用于实时同步加载今天的记录）
+     *
+     * @param date 日期字符串（格式：yyyy-MM-dd）
+     * @return 记录实体列表
+     */
+    @Query(
+        """
+        SELECT r.* FROM time_records r
+        INNER JOIN history_sessions s ON r.session_id = s.id
+        WHERE s.date = :date AND s.session_type = 'EVENT'
+        ORDER BY r.wall_clock_time ASC
+    """
+    )
+    suspend fun getEventRecordsByDate(date: String): List<TimeRecordEntity>
+
+    /**
      * 查询指定会话的所有记录
      *
      * @param sessionId 会话 ID
@@ -83,6 +114,14 @@ interface HistoryDao {
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRecords(records: List<TimeRecordEntity>)
+
+    /**
+     * 插入单条记录（实时同步使用）
+     *
+     * @param record 记录实体
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRecord(record: TimeRecordEntity)
 
     /**
      * 归档会话（事务操作，保证原子性）
@@ -163,4 +202,30 @@ interface HistoryDao {
      */
     @Query("DELETE FROM history_sessions WHERE date < :beforeDate")
     suspend fun deleteSessionsBeforeDate(beforeDate: String)
+
+    /**
+     * 删除指定日期的所有事件记录（重置今天的记录使用）
+     *
+     * @param date 日期字符串
+     */
+    @Query(
+        """
+        DELETE FROM time_records WHERE session_id IN (
+            SELECT id FROM history_sessions WHERE date = :date AND session_type = 'EVENT'
+        )
+    """
+    )
+    suspend fun deleteEventRecordsByDate(date: String)
+
+    /**
+     * 删除空的事件会话（清理无记录的会话）
+     */
+    @Query(
+        """
+        DELETE FROM history_sessions WHERE session_type = 'EVENT' AND id NOT IN (
+            SELECT DISTINCT session_id FROM time_records
+        )
+    """
+    )
+    suspend fun deleteEmptyEventSessions()
 }
