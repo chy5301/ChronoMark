@@ -119,7 +119,6 @@ class EventViewModel(
         val splitNanos = timeDiff * 1_000_000 // 毫秒转纳秒
 
         val newRecord = TimeRecord(
-            index = _uiState.value.records.size + 1,
             wallClockTime = currentWallClockTime,
             elapsedTimeNanos = 0L,  // 事件模式不需要累计时间
             splitTimeNanos = splitNanos,
@@ -188,12 +187,7 @@ class EventViewModel(
      */
     fun deleteRecord(recordId: String) {
         _uiState.update { state ->
-            val updatedRecords = state.records.filter { it.id != recordId }
-            // 重新计算序号（正序排列）
-            val reindexedRecords = updatedRecords.mapIndexed { index, record ->
-                record.copy(index = index + 1)
-            }
-            state.copy(records = reindexedRecords)
+            state.copy(records = state.records.filter { it.id != recordId })
         }
 
         // 从 Room 删除

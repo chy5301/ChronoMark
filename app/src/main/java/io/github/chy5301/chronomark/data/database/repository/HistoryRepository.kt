@@ -51,7 +51,6 @@ class HistoryRepository(
                 TimeRecordEntity(
                     id = record.id,
                     sessionId = session.id,
-                    index = record.index,
                     wallClockTime = record.wallClockTime,
                     elapsedTimeNanos = record.elapsedTimeNanos,
                     splitTimeNanos = record.splitTimeNanos,
@@ -105,7 +104,6 @@ class HistoryRepository(
                 TimeRecordEntity(
                     id = record.id,
                     sessionId = session.id,
-                    index = record.index,
                     wallClockTime = record.wallClockTime,
                     elapsedTimeNanos = record.elapsedTimeNanos,
                     splitTimeNanos = record.splitTimeNanos,
@@ -135,7 +133,6 @@ class HistoryRepository(
             historyDao.getEventRecordsByDate(date).map { entity ->
                 TimeRecord(
                     id = entity.id,
-                    index = entity.index,
                     wallClockTime = entity.wallClockTime,
                     elapsedTimeNanos = entity.elapsedTimeNanos,
                     splitTimeNanos = entity.splitTimeNanos,
@@ -176,7 +173,6 @@ class HistoryRepository(
             val entity = TimeRecordEntity(
                 id = record.id,
                 sessionId = session.id,
-                index = record.index,
                 wallClockTime = record.wallClockTime,
                 elapsedTimeNanos = record.elapsedTimeNanos,
                 splitTimeNanos = record.splitTimeNanos,
@@ -223,7 +219,6 @@ class HistoryRepository(
                 TimeRecordEntity(
                     id = record.id,
                     sessionId = session.id,
-                    index = record.index,
                     wallClockTime = record.wallClockTime,
                     elapsedTimeNanos = record.elapsedTimeNanos,
                     splitTimeNanos = record.splitTimeNanos,

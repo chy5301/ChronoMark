@@ -12,7 +12,6 @@ import androidx.room.PrimaryKey
  *
  * @property id 记录唯一标识符（UUID）
  * @property sessionId 关联的会话 ID（外键）
- * @property index 记录序号（从 1 开始）
  * @property wallClockTime 标记时刻（墙上时钟时间戳，毫秒）
  * @property elapsedTimeNanos 累计经过时间（纳秒，秒表模式专用）
  * @property splitTimeNanos 与上一条记录的时间差（纳秒，秒表模式专用）
@@ -36,8 +35,6 @@ data class TimeRecordEntity(
 
     @ColumnInfo(name = "session_id")
     val sessionId: String,                 // 关联会话 ID
-
-    val index: Int,                        // 记录序号
 
     @ColumnInfo(name = "wall_clock_time")
     val wallClockTime: Long,               // 标记时刻（毫秒）

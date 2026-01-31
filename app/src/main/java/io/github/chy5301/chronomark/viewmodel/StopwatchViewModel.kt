@@ -143,7 +143,6 @@ class StopwatchViewModel(
         val splitNanos = (currentNanos - lastNanos).coerceAtLeast(0L)
 
         val newRecord = TimeRecord(
-            index = _uiState.value.records.size + 1,
             wallClockTime = currentWallClockTime,
             elapsedTimeNanos = currentNanos,
             splitTimeNanos = splitNanos,
@@ -175,12 +174,7 @@ class StopwatchViewModel(
      */
     fun deleteRecord(recordId: String) {
         _uiState.update { state ->
-            val updatedRecords = state.records.filter { it.id != recordId }
-            // 重新计算序号
-            val reindexedRecords = updatedRecords.mapIndexed { index, record ->
-                record.copy(index = updatedRecords.size - index)
-            }
-            state.copy(records = reindexedRecords)
+            state.copy(records = state.records.filter { it.id != recordId })
         }
         saveCurrentState()
     }

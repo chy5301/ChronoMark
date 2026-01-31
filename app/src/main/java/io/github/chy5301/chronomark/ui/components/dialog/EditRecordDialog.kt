@@ -74,6 +74,7 @@ import java.util.Locale
 @Composable
 fun EditRecordDialog(
     record: TimeRecord,
+    index: Int,
     onDismiss: () -> Unit,
     onSave: (String) -> Unit,
     onDeleteRequest: () -> Unit,
@@ -81,7 +82,7 @@ fun EditRecordDialog(
 ) {
     EditRecordDialogImpl(
         id = record.id,
-        index = record.index,
+        index = index,
         elapsedTimeNanos = record.elapsedTimeNanos,
         wallClockTime = record.wallClockTime,
         initialNote = record.note,
@@ -95,6 +96,7 @@ fun EditRecordDialog(
 @Composable
 fun EditRecordDialog(
     record: TimeRecordEntity,
+    index: Int,
     onDismiss: () -> Unit,
     onSave: (String) -> Unit,
     onDeleteRequest: () -> Unit,
@@ -102,7 +104,7 @@ fun EditRecordDialog(
 ) {
     EditRecordDialogImpl(
         id = record.id,
-        index = record.index,
+        index = index,
         elapsedTimeNanos = record.elapsedTimeNanos,
         wallClockTime = record.wallClockTime,
         initialNote = record.note,

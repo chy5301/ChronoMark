@@ -111,8 +111,8 @@ class EventViewModelTest {
     fun `init - with legacy data - migrates and clears datastore`() = runTest(testDispatcher) {
         // Arrange
         val legacyRecords = listOf(
-            TimeRecord(id = "legacy-1", index = 1, wallClockTime = 1705280400000L, elapsedTimeNanos = 0L, splitTimeNanos = 0L),
-            TimeRecord(id = "legacy-2", index = 2, wallClockTime = 1705280500000L, elapsedTimeNanos = 0L, splitTimeNanos = 100_000_000L)
+            TimeRecord(id = "legacy-1", wallClockTime = 1705280400000L, elapsedTimeNanos = 0L, splitTimeNanos = 0L),
+            TimeRecord(id = "legacy-2", wallClockTime = 1705280500000L, elapsedTimeNanos = 0L, splitTimeNanos = 100_000_000L)
         )
         coEvery { mockDataStoreManager.eventRecordsFlow } returns flowOf(legacyRecords)
         coEvery { mockDataStoreManager.clearEventData() } returns Result.success(Unit)
@@ -145,7 +145,6 @@ class EventViewModelTest {
         val records = viewModel.uiState.value.records
         assertEquals(1, records.size)
         assertEquals(0L, records[0].splitTimeNanos)
-        assertEquals(1, records[0].index)
 
         clearViewModel()
     }
@@ -156,7 +155,6 @@ class EventViewModelTest {
         val existingRecords = listOf(
             TimeRecord(
                 id = "existing-1",
-                index = 1,
                 wallClockTime = System.currentTimeMillis() - 1000,
                 elapsedTimeNanos = 0L,
                 splitTimeNanos = 0L
@@ -175,7 +173,6 @@ class EventViewModelTest {
         val records = viewModel.uiState.value.records
         assertEquals(2, records.size)
         assertTrue(records[1].splitTimeNanos >= 900_000_000L)
-        assertEquals(2, records[1].index)
 
         clearViewModel()
     }
@@ -224,7 +221,6 @@ class EventViewModelTest {
         // Arrange
         val existingRecord = TimeRecord(
             id = "record-1",
-            index = 1,
             wallClockTime = System.currentTimeMillis(),
             elapsedTimeNanos = 0L,
             splitTimeNanos = 0L,
@@ -250,12 +246,12 @@ class EventViewModelTest {
     // ========== deleteRecord 测试 ==========
 
     @Test
-    fun `deleteRecord - reindexes remaining records`() = runTest(testDispatcher) {
+    fun `deleteRecord - removes record from list`() = runTest(testDispatcher) {
         // Arrange
         val records = listOf(
-            TimeRecord(id = "r1", index = 1, wallClockTime = 1000L, elapsedTimeNanos = 0L, splitTimeNanos = 0L),
-            TimeRecord(id = "r2", index = 2, wallClockTime = 2000L, elapsedTimeNanos = 0L, splitTimeNanos = 1_000_000_000L),
-            TimeRecord(id = "r3", index = 3, wallClockTime = 3000L, elapsedTimeNanos = 0L, splitTimeNanos = 1_000_000_000L)
+            TimeRecord(id = "r1", wallClockTime = 1000L, elapsedTimeNanos = 0L, splitTimeNanos = 0L),
+            TimeRecord(id = "r2", wallClockTime = 2000L, elapsedTimeNanos = 0L, splitTimeNanos = 1_000_000_000L),
+            TimeRecord(id = "r3", wallClockTime = 3000L, elapsedTimeNanos = 0L, splitTimeNanos = 1_000_000_000L)
         )
         coEvery { mockHistoryRepository.getEventRecordsByDate(any()) } returns records
         coEvery { mockHistoryRepository.deleteEventRecord(any()) } returns Result.success(Unit)
@@ -270,8 +266,8 @@ class EventViewModelTest {
         // Assert
         val remaining = viewModel.uiState.value.records
         assertEquals(2, remaining.size)
-        assertEquals(1, remaining[0].index)
-        assertEquals(2, remaining[1].index)
+        assertEquals("r1", remaining[0].id)
+        assertEquals("r3", remaining[1].id)
         coVerify(exactly = 1) { mockHistoryRepository.deleteEventRecord("r2") }
 
         clearViewModel()
@@ -283,7 +279,7 @@ class EventViewModelTest {
     fun `reset - clears UI and Room`() = runTest(testDispatcher) {
         // Arrange
         val records = listOf(
-            TimeRecord(id = "r1", index = 1, wallClockTime = 1000L, elapsedTimeNanos = 0L, splitTimeNanos = 0L)
+            TimeRecord(id = "r1", wallClockTime = 1000L, elapsedTimeNanos = 0L, splitTimeNanos = 0L)
         )
         coEvery { mockHistoryRepository.getEventRecordsByDate(any()) } returns records
         coEvery { mockHistoryRepository.deleteEventRecordsByDate(any()) } returns Result.success(Unit)
@@ -308,7 +304,7 @@ class EventViewModelTest {
     fun `generateShareText - returns formatted text`() = runTest(testDispatcher) {
         // Arrange
         val records = listOf(
-            TimeRecord(id = "r1", index = 1, wallClockTime = 1705280400000L, elapsedTimeNanos = 0L, splitTimeNanos = 0L, note = "first")
+            TimeRecord(id = "r1", wallClockTime = 1705280400000L, elapsedTimeNanos = 0L, splitTimeNanos = 0L, note = "first")
         )
         coEvery { mockHistoryRepository.getEventRecordsByDate(any()) } returns records
 

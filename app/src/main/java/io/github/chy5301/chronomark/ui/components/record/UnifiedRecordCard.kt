@@ -30,6 +30,7 @@ import io.github.chy5301.chronomark.util.TimeFormatter
  * 支持事件模式和秒表模式两种显示样式
  *
  * @param record 时间记录数据（TimeRecord）
+ * @param index 动态计算的序号（从 1 开始）
  * @param mode 显示模式（EVENT 或 STOPWATCH）
  * @param onClick 点击卡片的回调
  * @param modifier 修饰符
@@ -37,12 +38,13 @@ import io.github.chy5301.chronomark.util.TimeFormatter
 @Composable
 fun UnifiedRecordCard(
     record: TimeRecord,
+    index: Int,
     mode: RecordCardMode,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     UnifiedRecordCardImpl(
-        index = record.index,
+        index = index,
         wallClockTime = record.wallClockTime,
         elapsedTimeNanos = record.elapsedTimeNanos,
         splitTimeNanos = record.splitTimeNanos,
@@ -59,6 +61,7 @@ fun UnifiedRecordCard(
  * 支持事件模式和秒表模式两种显示样式
  *
  * @param record 时间记录实体（TimeRecordEntity）
+ * @param index 动态计算的序号（从 1 开始）
  * @param mode 显示模式（EVENT 或 STOPWATCH）
  * @param onClick 点击卡片的回调
  * @param modifier 修饰符
@@ -66,12 +69,13 @@ fun UnifiedRecordCard(
 @Composable
 fun UnifiedRecordCard(
     record: TimeRecordEntity,
+    index: Int,
     mode: RecordCardMode,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     UnifiedRecordCardImpl(
-        index = record.index,
+        index = index,
         wallClockTime = record.wallClockTime,
         elapsedTimeNanos = record.elapsedTimeNanos,
         splitTimeNanos = record.splitTimeNanos,

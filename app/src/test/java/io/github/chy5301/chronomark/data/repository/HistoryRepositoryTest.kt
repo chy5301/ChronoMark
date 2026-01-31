@@ -61,7 +61,6 @@ class HistoryRepositoryTest {
         val date = "2025-01-15"
         val record = TimeRecord(
             id = "test-id-1",
-            index = 1,
             wallClockTime = 1705280400000L,
             elapsedTimeNanos = 0L,
             splitTimeNanos = 0L,
@@ -89,7 +88,6 @@ class HistoryRepositoryTest {
 
         // 验证创建的记录
         assertEquals(record.id, recordSlot.captured.id)
-        assertEquals(record.index, recordSlot.captured.index)
         assertEquals(record.wallClockTime, recordSlot.captured.wallClockTime)
         assertEquals(record.note, recordSlot.captured.note)
     }
@@ -107,7 +105,6 @@ class HistoryRepositoryTest {
         )
         val record = TimeRecord(
             id = "test-id-2",
-            index = 2,
             wallClockTime = 1705280500000L,
             elapsedTimeNanos = 0L,
             splitTimeNanos = 100_000_000L,
@@ -151,9 +148,9 @@ class HistoryRepositoryTest {
         // Arrange
         val date = "2025-01-15"
         val records = listOf(
-            TimeRecord(id = "id-1", index = 1, wallClockTime = 1705280400000L, elapsedTimeNanos = 0L, splitTimeNanos = 0L),
-            TimeRecord(id = "id-2", index = 2, wallClockTime = 1705280500000L, elapsedTimeNanos = 0L, splitTimeNanos = 100_000_000L),
-            TimeRecord(id = "id-3", index = 3, wallClockTime = 1705280600000L, elapsedTimeNanos = 0L, splitTimeNanos = 100_000_000L)
+            TimeRecord(id = "id-1", wallClockTime = 1705280400000L, elapsedTimeNanos = 0L, splitTimeNanos = 0L),
+            TimeRecord(id = "id-2", wallClockTime = 1705280500000L, elapsedTimeNanos = 0L, splitTimeNanos = 100_000_000L),
+            TimeRecord(id = "id-3", wallClockTime = 1705280600000L, elapsedTimeNanos = 0L, splitTimeNanos = 100_000_000L)
         )
         val recordsSlot = slot<List<TimeRecordEntity>>()
 
@@ -180,7 +177,6 @@ class HistoryRepositoryTest {
             TimeRecordEntity(
                 id = "id-1",
                 sessionId = "session-1",
-                index = 1,
                 wallClockTime = 1705280400000L,
                 elapsedTimeNanos = 0L,
                 splitTimeNanos = 0L,
@@ -189,7 +185,6 @@ class HistoryRepositoryTest {
             TimeRecordEntity(
                 id = "id-2",
                 sessionId = "session-1",
-                index = 2,
                 wallClockTime = 1705280500000L,
                 elapsedTimeNanos = 0L,
                 splitTimeNanos = 100_000_000L,

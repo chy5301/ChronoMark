@@ -33,9 +33,10 @@ object ShareHelper {
         sb.appendLine("记录数: ${records.size}")
         sb.appendLine(SEPARATOR)
 
-        // 记录列表
-        records.forEachIndexed { index, record ->
-            sb.appendLine("#%02d".format(record.index))
+        // 记录列表（秒表模式：记录按时间倒序存储，序号从大到小）
+        records.forEachIndexed { listIndex, record ->
+            val displayIndex = records.size - listIndex
+            sb.appendLine("#%02d".format(displayIndex))
             sb.appendLine("累计: ${TimeFormatter.formatElapsed(record.elapsedTimeNanos)}")
             sb.appendLine("差值: ${TimeFormatter.formatSplit(record.splitTimeNanos)}")
             sb.appendLine("时间: ${TimeFormatter.formatWallClock(record.wallClockTime)}")
@@ -43,7 +44,7 @@ object ShareHelper {
                 sb.appendLine("备注: ${record.note}")
             }
             // 记录之间添加空行（最后一条除外）
-            if (index < records.size - 1) {
+            if (listIndex < records.size - 1) {
                 sb.appendLine()
             }
         }
@@ -70,15 +71,16 @@ object ShareHelper {
         sb.appendLine("记录数: ${records.size}")
         sb.appendLine(SEPARATOR)
 
-        // 记录列表
-        records.forEachIndexed { index, record ->
-            sb.appendLine("#%02d".format(record.index))
+        // 记录列表（事件模式：记录按时间升序存储，序号从 1 开始）
+        records.forEachIndexed { listIndex, record ->
+            val displayIndex = listIndex + 1
+            sb.appendLine("#%02d".format(displayIndex))
             sb.appendLine("时间: ${TimeFormatter.formatWallClock(record.wallClockTime)}")
             if (record.note.isNotBlank()) {
                 sb.appendLine("备注: ${record.note}")
             }
             // 记录之间添加空行（最后一条除外）
-            if (index < records.size - 1) {
+            if (listIndex < records.size - 1) {
                 sb.appendLine()
             }
         }
@@ -130,9 +132,10 @@ object ShareHelper {
         sb.appendLine("记录数: ${records.size}")
         sb.appendLine(SEPARATOR)
 
-        // 记录列表
-        records.forEachIndexed { index, record ->
-            sb.appendLine("#%02d".format(record.index))
+        // 记录列表（历史数据按时间升序查询，序号从 1 开始）
+        records.forEachIndexed { listIndex, record ->
+            val displayIndex = listIndex + 1
+            sb.appendLine("#%02d".format(displayIndex))
             sb.appendLine("累计: ${TimeFormatter.formatElapsed(record.elapsedTimeNanos)}")
             sb.appendLine("差值: ${TimeFormatter.formatSplit(record.splitTimeNanos)}")
             sb.appendLine("时间: ${TimeFormatter.formatWallClock(record.wallClockTime)}")
@@ -140,7 +143,7 @@ object ShareHelper {
                 sb.appendLine("备注: ${record.note}")
             }
             // 记录之间添加空行（最后一条除外）
-            if (index < records.size - 1) {
+            if (listIndex < records.size - 1) {
                 sb.appendLine()
             }
         }
@@ -171,15 +174,16 @@ object ShareHelper {
         sb.appendLine("记录数: ${records.size}")
         sb.appendLine(SEPARATOR)
 
-        // 记录列表
-        records.forEachIndexed { index, record ->
-            sb.appendLine("#%02d".format(record.index))
+        // 记录列表（历史数据按时间升序查询，序号从 1 开始）
+        records.forEachIndexed { listIndex, record ->
+            val displayIndex = listIndex + 1
+            sb.appendLine("#%02d".format(displayIndex))
             sb.appendLine("时间: ${TimeFormatter.formatWallClock(record.wallClockTime)}")
             if (record.note.isNotBlank()) {
                 sb.appendLine("备注: ${record.note}")
             }
             // 记录之间添加空行（最后一条除外）
-            if (index < records.size - 1) {
+            if (listIndex < records.size - 1) {
                 sb.appendLine()
             }
         }

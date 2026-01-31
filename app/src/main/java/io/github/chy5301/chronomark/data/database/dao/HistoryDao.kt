@@ -71,13 +71,13 @@ interface HistoryDao {
      * 查询指定会话的所有记录
      *
      * @param sessionId 会话 ID
-     * @return Flow 包装的记录列表（响应式）
+     * @return Flow 包装的记录列表（响应式，按时间升序）
      */
     @Query(
         """
         SELECT * FROM time_records
         WHERE session_id = :sessionId
-        ORDER BY `index` ASC
+        ORDER BY wall_clock_time ASC
     """
     )
     fun getRecordsBySessionId(sessionId: String): Flow<List<TimeRecordEntity>>

@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -52,6 +52,7 @@ fun EventScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     var selectedRecord by remember { mutableStateOf<TimeRecord?>(null) }
+    var selectedRecordIndex by remember { mutableIntStateOf(0) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showResetConfirm by remember { mutableStateOf(false) }
 
@@ -62,6 +63,7 @@ fun EventScreen(
     selectedRecord?.let { record ->
         EditRecordDialog(
             record = record,
+            index = selectedRecordIndex,
             onDismiss = { selectedRecord = null },
             onSave = { note ->
                 viewModel.updateRecordNote(record.id, note)
@@ -75,7 +77,7 @@ fun EventScreen(
     ConfirmDialog(
         show = showDeleteConfirm && selectedRecord != null,
         title = "确认删除",
-        message = "确定要删除记录 #${if (selectedRecord != null) "%02d".format(selectedRecord!!.index) else ""} 吗？",
+        message = "确定要删除记录 #${"%02d".format(selectedRecordIndex)} 吗？",
         confirmText = "删除",
         isDangerous = true,
         onConfirm = {
@@ -118,7 +120,10 @@ fun EventScreen(
         // 记录列表区
         EventRecordsListSection(
             records = uiState.records,
-            onRecordClick = { record -> selectedRecord = record },
+            onRecordClick = { record, index ->
+                selectedRecord = record
+                selectedRecordIndex = index
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
@@ -207,7 +212,7 @@ fun EventTimeDisplaySection(
 @Composable
 fun EventRecordsListSection(
     records: List<TimeRecord>,
-    onRecordClick: (TimeRecord) -> Unit,
+    onRecordClick: (TimeRecord, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (records.isEmpty()) {
@@ -261,11 +266,13 @@ fun EventRecordsListSection(
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 0.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(records) { record ->
+            itemsIndexed(records) { listIndex, record ->
+                val displayIndex = listIndex + 1  // 序号从 1 开始
                 UnifiedRecordCard(
                     record = record,
+                    index = displayIndex,
                     mode = RecordCardMode.EVENT,
-                    onClick = { onRecordClick(record) }
+                    onClick = { onRecordClick(record, displayIndex) }
                 )
             }
         }

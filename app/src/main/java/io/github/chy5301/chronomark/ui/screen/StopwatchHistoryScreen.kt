@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -104,6 +103,7 @@ fun StopwatchHistoryScreen(
     var showDeleteSessionConfirm by remember { mutableStateOf(false) }
     var showEditTitleDialog by remember { mutableStateOf(false) }
     var selectedRecord by remember { mutableStateOf<TimeRecordEntity?>(null) }
+    var selectedRecordIndex by remember { mutableStateOf(0) }
     var showDeleteRecordConfirm by remember { mutableStateOf(false) }
     var showCalendarDialog by remember { mutableStateOf(false) }
 
@@ -195,6 +195,7 @@ fun StopwatchHistoryScreen(
     selectedRecord?.let { record ->
         EditRecordDialog(
             record = record,
+            index = selectedRecordIndex,
             onDismiss = { selectedRecord = null },
             onSave = { note ->
                 viewModel.updateRecordNote(record.id, note)
@@ -208,7 +209,7 @@ fun StopwatchHistoryScreen(
     ConfirmDialog(
         show = showDeleteRecordConfirm && selectedRecord != null,
         title = "确认删除",
-        message = "确定要删除记录 #${if (selectedRecord != null) String.format(Locale.US, "%02d", selectedRecord!!.index) else ""} 吗？",
+        message = "确定要删除记录 #${String.format(Locale.US, "%02d", selectedRecordIndex)} 吗？",
         confirmText = "删除",
         isDangerous = true,
         onConfirm = {
@@ -348,17 +349,22 @@ fun StopwatchHistoryScreen(
                             onTitleClick = { showSessionListDialog = true }
                         )
 
-                        // 记录列表
+                        // 记录列表（秒表模式：按时间升序，序号从 1 开始）
                         LazyColumn(
                             modifier = Modifier.weight(1f),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            items(uiState.selectedSessionRecords) { record ->
+                            itemsIndexed(uiState.selectedSessionRecords) { listIndex, record ->
+                                val displayIndex = listIndex + 1  // 序号从 1 开始
                                 UnifiedRecordCard(
                                     record = record,
+                                    index = displayIndex,
                                     mode = RecordCardMode.STOPWATCH,
-                                    onClick = { selectedRecord = record }
+                                    onClick = {
+                                        selectedRecord = record
+                                        selectedRecordIndex = displayIndex
+                                    }
                                 )
                             }
                         }

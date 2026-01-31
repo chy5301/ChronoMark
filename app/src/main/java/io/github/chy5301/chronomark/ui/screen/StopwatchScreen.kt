@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Flag
@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,6 +58,7 @@ fun StopwatchScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var selectedRecord by remember { mutableStateOf<TimeRecord?>(null) }
+    var selectedRecordIndex by remember { mutableIntStateOf(0) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showSaveConfirm by remember { mutableStateOf(false) }
     var showTitleInput by remember { mutableStateOf(false) }
@@ -149,6 +151,7 @@ fun StopwatchScreen(
     selectedRecord?.let { record ->
         EditRecordDialog(
             record = record,
+            index = selectedRecordIndex,
             onDismiss = { selectedRecord = null },
             onSave = { note ->
                 viewModel.updateRecordNote(record.id, note)
@@ -162,7 +165,7 @@ fun StopwatchScreen(
     ConfirmDialog(
         show = showDeleteConfirm && selectedRecord != null,
         title = "确认删除",
-        message = "确定要删除记录 #${if (selectedRecord != null) "%02d".format(selectedRecord!!.index) else ""} 吗？",
+        message = "确定要删除记录 #${"%02d".format(selectedRecordIndex)} 吗？",
         confirmText = "删除",
         isDangerous = true,
         onConfirm = {
@@ -192,7 +195,10 @@ fun StopwatchScreen(
         // 记录列表区
         RecordsListSection(
             records = uiState.records,
-            onRecordClick = { record -> selectedRecord = record },
+            onRecordClick = { record, index ->
+                selectedRecord = record
+                selectedRecordIndex = index
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
@@ -285,7 +291,7 @@ fun TimeDisplaySection(
 @Composable
 fun RecordsListSection(
     records: List<TimeRecord>,
-    onRecordClick: (TimeRecord) -> Unit,
+    onRecordClick: (TimeRecord, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (records.isEmpty()) {
@@ -316,11 +322,14 @@ fun RecordsListSection(
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 0.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(records) { record ->
+            // 秒表模式：记录按时间倒序存储（最新在前），序号从大到小显示
+            itemsIndexed(records) { listIndex, record ->
+                val displayIndex = records.size - listIndex  // 最新记录显示最大序号
                 UnifiedRecordCard(
                     record = record,
+                    index = displayIndex,
                     mode = RecordCardMode.STOPWATCH,
-                    onClick = { onRecordClick(record) }
+                    onClick = { onRecordClick(record, displayIndex) }
                 )
             }
         }
