@@ -11,6 +11,8 @@ import androidx.compose.ui.platform.LocalContext
 import io.github.chy5301.chronomark.data.DataStoreManager
 import io.github.chy5301.chronomark.data.model.AppMode
 import io.github.chy5301.chronomark.data.model.AppScreen
+import io.github.chy5301.chronomark.ui.components.dialog.ConfirmDialog
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -27,7 +29,10 @@ import kotlinx.coroutines.launch
  * - 历史记录的模式切换不影响主工作区的模式
  */
 @Composable
-fun MainScreen() {
+fun MainScreen(
+    timezoneChanged: StateFlow<Boolean>,
+    onDismissTimezoneNotice: () -> Unit
+) {
     val context = LocalContext.current
     val dataStoreManager = remember { DataStoreManager(context) }
     val coroutineScope = rememberCoroutineScope()
@@ -37,6 +42,21 @@ fun MainScreen() {
 
     // 当前显示的页面（不持久化，每次启动从工作区开始）
     var currentScreen by remember { mutableStateOf(AppScreen.WORKSPACE) }
+
+    // 时区变化提示状态
+    val showTimezoneNotice by timezoneChanged.collectAsState()
+
+    // 时区变化提示对话框
+    ConfirmDialog(
+        show = showTimezoneNotice,
+        title = "时区已变更",
+        message = "检测到系统时区已变更。\n\n" +
+                "这可能导致部分历史记录的时间显示与实际记录时间不一致，" +
+                "以及当天暂存区数据暂时无法显示（数据未丢失，可在历史记录中查看）。",
+        confirmText = "知道了",
+        onConfirm = onDismissTimezoneNotice,
+        onDismiss = onDismissTimezoneNotice
+    )
 
     when (currentScreen) {
         AppScreen.WORKSPACE -> WorkspaceScreen(

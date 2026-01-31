@@ -33,6 +33,7 @@ class DataStoreManager(private val context: Context) {
         private val KEY_KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
         private val KEY_VIBRATION_ENABLED = booleanPreferencesKey("vibration_enabled")
         private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
+        private val KEY_LAST_TIMEZONE_ID = stringPreferencesKey("last_timezone_id")
 
         // 归档设置
         private val KEY_ARCHIVE_BOUNDARY_HOUR = intPreferencesKey("archive_boundary_hour")
@@ -186,6 +187,38 @@ class DataStoreManager(private val context: Context) {
             } catch (_: IllegalArgumentException) {
                 ThemeMode.SYSTEM
             }
+        }
+
+    /**
+     * 保存上次记录的时区 ID
+     * @param timezoneId 时区 ID（如 "Asia/Shanghai"）
+     * @return Result.success(Unit) 或 Result.failure(exception)
+     */
+    suspend fun saveLastTimezoneId(timezoneId: String): Result<Unit> {
+        return try {
+            context.dataStore.edit { preferences ->
+                preferences[KEY_LAST_TIMEZONE_ID] = timezoneId
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 读取上次记录的时区 ID
+     * 首次运行或更新时返回空字符串
+     */
+    val lastTimezoneIdFlow: Flow<String> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(androidx.datastore.preferences.core.emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[KEY_LAST_TIMEZONE_ID] ?: ""
         }
 
     // ==================== 归档设置 ====================

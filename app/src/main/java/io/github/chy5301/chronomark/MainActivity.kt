@@ -17,8 +17,12 @@ import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.ThemeMode
 import io.github.chy5301.chronomark.ui.screen.MainScreen
 import io.github.chy5301.chronomark.ui.theme.ChronoMarkTheme
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.time.ZoneId
 
 class MainActivity : ComponentActivity() {
 
@@ -29,6 +33,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var dataStoreManager: DataStoreManager
     private lateinit var historyRepository: HistoryRepository
 
+    // 时区变化检测状态
+    private val _timezoneChanged = MutableStateFlow(false)
+    val timezoneChanged: StateFlow<Boolean> = _timezoneChanged.asStateFlow()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -38,9 +46,10 @@ class MainActivity : ComponentActivity() {
         val database = AppDatabase.getDatabase(this)
         historyRepository = HistoryRepository(database.historyDao())
 
-        // 执行启动时的历史数据清理
+        // 执行启动时的初始化任务
         lifecycleScope.launch {
             cleanupOldData()
+            checkTimezoneChange()
         }
 
         setContent {
@@ -73,9 +82,36 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                MainScreen()
+                MainScreen(
+                    timezoneChanged = timezoneChanged,
+                    onDismissTimezoneNotice = ::dismissTimezoneChangeNotice
+                )
             }
         }
+    }
+
+    /**
+     * 检测时区是否发生变化
+     * 首次安装或更新时不会提示（lastTimezoneId 为空）
+     */
+    private suspend fun checkTimezoneChange() {
+        val lastTimezoneId = dataStoreManager.lastTimezoneIdFlow.first()
+        val currentTimezoneId = ZoneId.systemDefault().id
+
+        if (lastTimezoneId.isNotEmpty() && lastTimezoneId != currentTimezoneId) {
+            Log.i(TAG, "Timezone changed: $lastTimezoneId -> $currentTimezoneId")
+            _timezoneChanged.value = true
+        }
+
+        // 无论是否变化，都更新存储
+        dataStoreManager.saveLastTimezoneId(currentTimezoneId)
+    }
+
+    /**
+     * 关闭时区变化提示
+     */
+    fun dismissTimezoneChangeNotice() {
+        _timezoneChanged.value = false
     }
 
     /**
