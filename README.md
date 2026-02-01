@@ -133,6 +133,7 @@ ChronoMark 事件记录
 - 📳 **震动反馈**：按钮点击时提供触觉反馈
 - 🔄 **归档配置**：自动归档开关、归档分界点、历史保留时长
 - 🌍 **时区检测**：启动时检测系统时区变化并提示用户
+- 🔄 **应用内更新检查**：支持 Gitee/GitHub 双源自动检查，可切换更新通道
 - 💾 **设置持久化**：应用重启后保留设置
 
 ---
@@ -197,6 +198,9 @@ cd ChronoMark
 点击顶部设置图标，可配置：
 - 保持屏幕常亮
 - 震动反馈
+- 检查更新：手动检查新版本
+- 更新通道：Gitee优先 / GitHub优先
+- 忽略版本：跳过特定版本的更新提示
 
 ---
 
@@ -236,6 +240,8 @@ app/src/main/java/io/github/chy5301/chronomark/
 │   │   ├── dao/                 # 数据访问对象
 │   │   ├── entity/              # 数据库实体
 │   │   └── repository/          # 数据仓库层
+│   ├── network/                 # 网络请求
+│   │   └── UpdateChecker.kt     # 版本更新检查器
 │   └── model/                   # 数据模型
 │       ├── AppMode.kt           # 应用模式枚举
 │       ├── TimeRecord.kt        # 时间记录数据模型
@@ -259,7 +265,8 @@ app/src/main/java/io/github/chy5301/chronomark/
 ├── util/                        # 工具类
 │   ├── TimeFormatter.kt         # 时间格式化
 │   ├── ShareHelper.kt           # 分享文本生成
-│   └── ArchiveUtils.kt          # 归档工具（逻辑日期计算）
+│   ├── ArchiveUtils.kt          # 归档工具（逻辑日期计算）
+│   └── VersionUtils.kt          # 版本比较工具
 └── viewmodel/                   # ViewModel 层
     ├── StopwatchViewModel.kt    # 秒表业务逻辑
     ├── EventViewModel.kt        # 事件业务逻辑
@@ -331,8 +338,6 @@ app/src/main/java/io/github/chy5301/chronomark/
 - [x] **v1.0.2**: 时区变化检测、数据库迁移修复（2026-02-01）
 
 ### v1.1 规划
-- 记录描述文本长度优化
-- 版本更新检查
 - 统计功能：记录数趋势图
 - 搜索功能：按备注搜索
 - 标签系统：工作/学习/运动分类

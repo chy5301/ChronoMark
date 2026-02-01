@@ -21,6 +21,7 @@ import io.github.chy5301.chronomark.data.model.ThemeMode
 import io.github.chy5301.chronomark.data.model.UpdateChannel
 import io.github.chy5301.chronomark.data.model.UpdateInfo
 import io.github.chy5301.chronomark.data.network.UpdateChecker
+import io.github.chy5301.chronomark.ui.components.dialog.CompactAlertDialog
 import io.github.chy5301.chronomark.ui.components.dialog.UpdateCheckResultDialog
 import io.github.chy5301.chronomark.ui.components.dialog.UpdateDialog
 import kotlinx.coroutines.launch
@@ -563,7 +564,7 @@ fun ThemeSelectionDialog(
     onDismiss: () -> Unit,
     onThemeSelected: (ThemeMode) -> Unit
 ) {
-    AlertDialog(
+    CompactAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(text = "选择主题")
@@ -688,7 +689,7 @@ fun RetentionDaysDialog(
         -1 to "永久保留\n不自动删除（需手动清理）"
     )
 
-    AlertDialog(
+    CompactAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(text = "历史记录保留时长")
@@ -733,7 +734,7 @@ fun ClearHistoryConfirmDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
-    AlertDialog(
+    CompactAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(text = "清空所有历史记录")
@@ -822,7 +823,7 @@ fun UpdateChannelDialog(
         UpdateChannel.GITHUB_FIRST to Pair("GitHub 优先", "先尝试 GitHub，失败后使用 Gitee（推荐海外用户）")
     )
 
-    AlertDialog(
+    CompactAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(text = "选择更新通道")

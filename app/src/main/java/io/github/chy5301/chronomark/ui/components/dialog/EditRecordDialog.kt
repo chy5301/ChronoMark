@@ -5,10 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -152,14 +150,14 @@ private fun EditRecordDialogImpl(
 ) {
     var noteText by remember(id) { mutableStateOf(initialNote) }
 
-    AlertDialog(
+    CompactAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text("编辑记录 #${String.format(Locale.US, "%02d", index)}")
         },
         text = {
             Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // 只读信息 - 仅秒表模式显示累计时间
                 if (mode == RecordCardMode.STOPWATCH) {
@@ -176,8 +174,6 @@ private fun EditRecordDialogImpl(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
-
                 // 备注输入框（扩大显示区域）
                 OutlinedTextField(
                     value = noteText,
@@ -185,7 +181,7 @@ private fun EditRecordDialogImpl(
                     label = { Text("备注") },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 120.dp),
+                        .heightIn(min = 160.dp),
                     maxLines = 8,
                     minLines = 3
                 )

@@ -1,6 +1,5 @@
 package io.github.chy5301.chronomark.ui.components.dialog
 
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -66,7 +65,7 @@ fun ConfirmDialog(
     isDangerous: Boolean = false
 ) {
     if (show) {
-        AlertDialog(
+        CompactAlertDialog(
             onDismissRequest = onDismiss,
             title = { Text(title) },
             text = { Text(message) },

@@ -183,7 +183,7 @@ private fun UnifiedRecordCardImpl(
             if (note.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "📝 $note",
+                    text = note,
                     fontSize = 16.sp,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 3,

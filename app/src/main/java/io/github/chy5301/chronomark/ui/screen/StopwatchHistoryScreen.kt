@@ -60,6 +60,7 @@ import io.github.chy5301.chronomark.data.database.entity.TimeRecordEntity
 import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.AppMode
 import io.github.chy5301.chronomark.data.model.RecordCardMode
+import io.github.chy5301.chronomark.ui.components.dialog.CompactAlertDialog
 import io.github.chy5301.chronomark.ui.components.dialog.ConfirmDialog
 import io.github.chy5301.chronomark.ui.components.dialog.EditRecordDialog
 import io.github.chy5301.chronomark.ui.components.history.CalendarPickerDialog
@@ -150,7 +151,7 @@ fun StopwatchHistoryScreen(
             mutableStateOf(currentSession?.title ?: "")
         }
 
-        AlertDialog(
+        CompactAlertDialog(
             onDismissRequest = { showEditTitleDialog = false },
             title = { Text("编辑会话标题") },
             text = {
@@ -565,7 +566,7 @@ private fun SessionListDialog(
 ) {
     var selectedIndex by remember { mutableIntStateOf(currentIndex) }
 
-    AlertDialog(
+    CompactAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("选择会话") },
         text = {

@@ -41,6 +41,7 @@ import io.github.chy5301.chronomark.data.model.RecordCardMode
 import io.github.chy5301.chronomark.data.model.StopwatchStatus
 import io.github.chy5301.chronomark.data.model.TimeRecord
 import io.github.chy5301.chronomark.ui.components.button.ControlButton
+import io.github.chy5301.chronomark.ui.components.dialog.CompactAlertDialog
 import io.github.chy5301.chronomark.ui.components.dialog.ConfirmDialog
 import io.github.chy5301.chronomark.ui.components.dialog.EditRecordDialog
 import io.github.chy5301.chronomark.ui.components.record.UnifiedRecordCard
@@ -75,7 +76,7 @@ fun StopwatchScreen(
 
     // 保存确认对话框
     if (showSaveConfirm) {
-        AlertDialog(
+        CompactAlertDialog(
             onDismissRequest = { /* 禁止点击外部关闭 */ },
             title = { Text("保存到历史记录？") },
             text = { Text("是否保存当前会话到历史记录？") },
@@ -111,7 +112,7 @@ fun StopwatchScreen(
             titleText = viewModel.getDefaultTitle()
         }
 
-        AlertDialog(
+        CompactAlertDialog(
             onDismissRequest = { /* 禁止点击外部关闭 */ },
             title = { Text("输入会话标题") },
             text = {

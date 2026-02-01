@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -30,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import io.github.chy5301.chronomark.ui.components.dialog.CompactAlertDialog
 import java.time.LocalDate
 
 /**
@@ -52,7 +52,7 @@ fun CalendarPickerDialog(
     var currentMonth by remember { mutableStateOf(selectedDate.withDayOfMonth(1)) }
     var tempSelectedDate by remember { mutableStateOf(selectedDate) }
 
-    AlertDialog(
+    CompactAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("选择日期") },
         text = {
