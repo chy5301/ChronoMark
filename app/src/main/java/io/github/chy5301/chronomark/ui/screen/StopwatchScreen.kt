@@ -152,6 +152,7 @@ fun StopwatchScreen(
         EditRecordDialog(
             record = record,
             index = selectedRecordIndex,
+            mode = RecordCardMode.STOPWATCH,
             onDismiss = { selectedRecord = null },
             onSave = { note ->
                 viewModel.updateRecordNote(record.id, note)

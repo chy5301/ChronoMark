@@ -24,6 +24,7 @@ local.properties
 .vscode/
 .navigation/
 captures/
+.claude/
 
 # Native build artifacts
 .externalNativeBuild/

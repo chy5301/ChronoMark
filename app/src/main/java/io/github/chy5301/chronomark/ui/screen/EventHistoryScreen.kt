@@ -110,6 +110,7 @@ fun EventHistoryScreen(
         EditRecordDialog(
             record = record,
             index = selectedRecordIndex,
+            mode = RecordCardMode.EVENT,
             onDismiss = { selectedRecord = null },
             onSave = { note ->
                 viewModel.updateRecordNote(record.id, note)
