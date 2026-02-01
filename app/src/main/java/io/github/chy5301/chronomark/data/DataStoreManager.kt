@@ -13,6 +13,7 @@ import io.github.chy5301.chronomark.data.model.AppMode
 import io.github.chy5301.chronomark.data.model.StopwatchStatus
 import io.github.chy5301.chronomark.data.model.ThemeMode
 import io.github.chy5301.chronomark.data.model.TimeRecord
+import io.github.chy5301.chronomark.data.model.UpdateChannel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
@@ -50,6 +51,12 @@ class DataStoreManager(private val context: Context) {
 
         // 事件模式数据
         private val KEY_EVENT_RECORDS = stringPreferencesKey("event_records")
+
+        // 更新检查设置
+        private val KEY_AUTO_UPDATE_CHECK_ENABLED = booleanPreferencesKey("auto_update_check_enabled")
+        private val KEY_LAST_UPDATE_CHECK_TIME = longPreferencesKey("last_update_check_time")
+        private val KEY_IGNORED_VERSIONS = stringPreferencesKey("ignored_versions")
+        private val KEY_UPDATE_CHANNEL = stringPreferencesKey("update_channel")
     }
 
     private val json = Json {
@@ -498,6 +505,170 @@ class DataStoreManager(private val context: Context) {
                 } catch (_: Exception) {
                     emptyList()
                 }
+            }
+        }
+
+    // ==================== 更新检查设置 ====================
+
+    /**
+     * 保存自动检查更新开关
+     * @param enabled 是否启用自动检查
+     * @return Result.success(Unit) 或 Result.failure(exception)
+     */
+    suspend fun saveAutoUpdateCheckEnabled(enabled: Boolean): Result<Unit> {
+        return try {
+            context.dataStore.edit { preferences ->
+                preferences[KEY_AUTO_UPDATE_CHECK_ENABLED] = enabled
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 读取自动检查更新开关
+     */
+    val autoUpdateCheckEnabledFlow: Flow<Boolean> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(androidx.datastore.preferences.core.emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[KEY_AUTO_UPDATE_CHECK_ENABLED] ?: true  // 默认启用
+        }
+
+    /**
+     * 保存上次检查更新时间
+     * @param timestamp 时间戳（毫秒）
+     * @return Result.success(Unit) 或 Result.failure(exception)
+     */
+    suspend fun saveLastUpdateCheckTime(timestamp: Long): Result<Unit> {
+        return try {
+            context.dataStore.edit { preferences ->
+                preferences[KEY_LAST_UPDATE_CHECK_TIME] = timestamp
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 读取上次检查更新时间
+     */
+    val lastUpdateCheckTimeFlow: Flow<Long> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(androidx.datastore.preferences.core.emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[KEY_LAST_UPDATE_CHECK_TIME] ?: 0L
+        }
+
+    /**
+     * 保存忽略的版本列表
+     * @param versions 版本号集合
+     * @return Result.success(Unit) 或 Result.failure(exception)
+     */
+    suspend fun saveIgnoredVersions(versions: Set<String>): Result<Unit> {
+        return try {
+            context.dataStore.edit { preferences ->
+                val jsonString = json.encodeToString(versions.toList())
+                preferences[KEY_IGNORED_VERSIONS] = jsonString
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 添加忽略的版本
+     * @param version 要忽略的版本号
+     * @return Result.success(Unit) 或 Result.failure(exception)
+     */
+    suspend fun addIgnoredVersion(version: String): Result<Unit> {
+        return try {
+            context.dataStore.edit { preferences ->
+                val currentJson = preferences[KEY_IGNORED_VERSIONS] ?: "[]"
+                val currentVersions = try {
+                    json.decodeFromString<List<String>>(currentJson).toMutableSet()
+                } catch (_: Exception) {
+                    mutableSetOf()
+                }
+                currentVersions.add(version)
+                preferences[KEY_IGNORED_VERSIONS] = json.encodeToString(currentVersions.toList())
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 读取忽略的版本列表
+     */
+    val ignoredVersionsFlow: Flow<Set<String>> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(androidx.datastore.preferences.core.emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            val jsonString = preferences[KEY_IGNORED_VERSIONS]
+            if (jsonString.isNullOrEmpty()) {
+                emptySet()
+            } else {
+                try {
+                    json.decodeFromString<List<String>>(jsonString).toSet()
+                } catch (_: Exception) {
+                    emptySet()
+                }
+            }
+        }
+
+    /**
+     * 保存更新通道设置
+     * @param channel 更新通道
+     * @return Result.success(Unit) 或 Result.failure(exception)
+     */
+    suspend fun saveUpdateChannel(channel: UpdateChannel): Result<Unit> {
+        return try {
+            context.dataStore.edit { preferences ->
+                preferences[KEY_UPDATE_CHANNEL] = channel.name
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 读取更新通道设置
+     */
+    val updateChannelFlow: Flow<UpdateChannel> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(androidx.datastore.preferences.core.emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            val channelName = preferences[KEY_UPDATE_CHANNEL] ?: UpdateChannel.GITEE_FIRST.name
+            try {
+                UpdateChannel.valueOf(channelName)
+            } catch (_: IllegalArgumentException) {
+                UpdateChannel.GITEE_FIRST
             }
         }
 

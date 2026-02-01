@@ -10,11 +10,15 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.lifecycle.lifecycleScope
 import io.github.chy5301.chronomark.data.DataStoreManager
 import io.github.chy5301.chronomark.data.database.AppDatabase
 import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.ThemeMode
+import io.github.chy5301.chronomark.data.model.UpdateInfo
+import io.github.chy5301.chronomark.data.network.UpdateChecker
+import io.github.chy5301.chronomark.ui.components.dialog.UpdateDialog
 import io.github.chy5301.chronomark.ui.screen.MainScreen
 import io.github.chy5301.chronomark.ui.theme.ChronoMarkTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,6 +41,13 @@ class MainActivity : ComponentActivity() {
     private val _timezoneChanged = MutableStateFlow(false)
     val timezoneChanged: StateFlow<Boolean> = _timezoneChanged.asStateFlow()
 
+    // 更新检查器
+    private val updateChecker = UpdateChecker()
+
+    // 更新信息状态
+    private val _updateInfo = MutableStateFlow<UpdateInfo?>(null)
+    val updateInfo: StateFlow<UpdateInfo?> = _updateInfo.asStateFlow()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -50,6 +61,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             cleanupOldData()
             checkTimezoneChange()
+            checkForUpdateOnStartup()
         }
 
         setContent {
@@ -58,6 +70,18 @@ class MainActivity : ComponentActivity() {
 
             // 监听主题模式设置
             val themeMode by dataStoreManager.themeModeFlow.collectAsState(initial = ThemeMode.SYSTEM)
+
+            // 监听更新信息
+            val currentUpdateInfo by updateInfo.collectAsState()
+
+            // 获取当前版本号
+            val versionName = remember {
+                try {
+                    packageManager.getPackageInfo(packageName, 0).versionName ?: "未知版本"
+                } catch (_: Exception) {
+                    "未知版本"
+                }
+            }
 
             // 根据主题模式设置确定是否使用深色主题
             val isSystemInDarkTheme = isSystemInDarkTheme()
@@ -86,6 +110,21 @@ class MainActivity : ComponentActivity() {
                     timezoneChanged = timezoneChanged,
                     onDismissTimezoneNotice = ::dismissTimezoneChangeNotice
                 )
+
+                // 更新提示对话框
+                currentUpdateInfo?.let { info ->
+                    UpdateDialog(
+                        currentVersion = versionName,
+                        updateInfo = info,
+                        onDismiss = { dismissUpdateDialog() },
+                        onIgnoreVersion = {
+                            lifecycleScope.launch {
+                                dataStoreManager.addIgnoredVersion(info.version)
+                            }
+                            dismissUpdateDialog()
+                        }
+                    )
+                }
             }
         }
     }
@@ -130,5 +169,65 @@ class MainActivity : ComponentActivity() {
                 // 清理失败不影响应用启动，只记录日志
                 Log.w(TAG, "Cleanup failed but app continues", e)
             }
+    }
+
+    /**
+     * 启动时检查更新
+     * 遵循以下条件：
+     * 1. 自动检查更新已启用
+     * 2. 距离上次检查已超过 24 小时
+     */
+    private suspend fun checkForUpdateOnStartup() {
+        // 检查是否启用自动更新
+        val autoCheckEnabled = dataStoreManager.autoUpdateCheckEnabledFlow.first()
+        if (!autoCheckEnabled) {
+            Log.d(TAG, "Auto update check is disabled")
+            return
+        }
+
+        // 检查是否满足时间间隔
+        val lastCheckTime = dataStoreManager.lastUpdateCheckTimeFlow.first()
+        if (!updateChecker.shouldAutoCheck(lastCheckTime)) {
+            Log.d(TAG, "Not time for auto update check yet")
+            return
+        }
+
+        // 获取当前版本
+        val currentVersion = try {
+            packageManager.getPackageInfo(packageName, 0).versionName ?: return
+        } catch (_: Exception) {
+            return
+        }
+
+        // 获取更新通道和忽略版本列表
+        val channel = dataStoreManager.updateChannelFlow.first()
+        val ignoredVersions = dataStoreManager.ignoredVersionsFlow.first()
+
+        Log.d(TAG, "Starting auto update check")
+
+        // 执行检查
+        when (val result = updateChecker.checkForUpdate(currentVersion, channel, ignoredVersions)) {
+            is UpdateChecker.CheckResult.UpdateAvailable -> {
+                Log.i(TAG, "Auto check found new version: ${result.updateInfo.version}")
+                _updateInfo.value = result.updateInfo
+            }
+            is UpdateChecker.CheckResult.UpToDate -> {
+                Log.d(TAG, "Auto check: already up to date")
+            }
+            is UpdateChecker.CheckResult.Error -> {
+                // 自动检查失败静默处理，不打扰用户
+                Log.w(TAG, "Auto check failed: ${result.message}")
+            }
+        }
+
+        // 更新检查时间
+        dataStoreManager.saveLastUpdateCheckTime(System.currentTimeMillis())
+    }
+
+    /**
+     * 关闭更新对话框
+     */
+    private fun dismissUpdateDialog() {
+        _updateInfo.value = null
     }
 }

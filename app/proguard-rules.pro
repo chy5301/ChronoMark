@@ -62,3 +62,13 @@
 #     public static *** v(...);
 #     public static *** i(...);
 # }
+
+# ===== OkHttp 混淆规则 =====
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-keep class okhttp3.** { *; }
+-keep interface okhttp3.** { *; }
+
+# 保留网络相关模型
+-keep class io.github.chy5301.chronomark.data.network.** { *; }
+-keepclassmembers class io.github.chy5301.chronomark.data.network.** { *; }

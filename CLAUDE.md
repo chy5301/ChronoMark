@@ -47,6 +47,7 @@ app/src/main/java/io/github/chy5301/chronomark/
 ├── data/
 │   ├── DataStoreManager.kt          # 设置 + 工作区
 │   ├── database/                    # Room（历史记录）
+│   ├── network/                     # 网络请求（OkHttp）
 │   └── model/                       # 数据模型
 ├── ui/
 │   ├── screen/                      # 页面（Main/Event/Stopwatch/History/Settings）

@@ -18,6 +18,11 @@ import io.github.chy5301.chronomark.data.DataStoreManager
 import io.github.chy5301.chronomark.data.database.AppDatabase
 import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.ThemeMode
+import io.github.chy5301.chronomark.data.model.UpdateChannel
+import io.github.chy5301.chronomark.data.model.UpdateInfo
+import io.github.chy5301.chronomark.data.network.UpdateChecker
+import io.github.chy5301.chronomark.ui.components.dialog.UpdateCheckResultDialog
+import io.github.chy5301.chronomark.ui.components.dialog.UpdateDialog
 import kotlinx.coroutines.launch
 import android.content.pm.PackageManager
 import java.util.Locale
@@ -49,11 +54,27 @@ fun SettingsScreen(
     val archiveBoundaryMinute by dataStoreManager.archiveBoundaryMinuteFlow.collectAsState(initial = 0)
     val historyRetentionDays by dataStoreManager.historyRetentionDaysFlow.collectAsState(initial = 365)
 
+    // 从 DataStore 读取更新设置
+    val autoUpdateCheckEnabled by dataStoreManager.autoUpdateCheckEnabledFlow.collectAsState(initial = true)
+    val updateChannel by dataStoreManager.updateChannelFlow.collectAsState(initial = UpdateChannel.GITEE_FIRST)
+    val ignoredVersions by dataStoreManager.ignoredVersionsFlow.collectAsState(initial = emptySet())
+
+    // 更新检查器
+    val updateChecker = remember { UpdateChecker() }
+
     // 对话框状态
     var showThemeDialog by remember { mutableStateOf(false) }
     var showBoundaryTimeDialog by remember { mutableStateOf(false) }
     var showRetentionDialog by remember { mutableStateOf(false) }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
+    var showUpdateChannelDialog by remember { mutableStateOf(false) }
+
+    // 更新检查状态
+    var isCheckingUpdate by remember { mutableStateOf(false) }
+    var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
+    var showUpToDateDialog by remember { mutableStateOf(false) }
+    var updateCheckError by remember { mutableStateOf<String?>(null) }
 
     // 获取应用版本号
     val versionName = remember {
@@ -176,6 +197,72 @@ fun SettingsScreen(
                 )
             }
 
+            // 更新设置分组
+            SettingsGroup(title = "更新") {
+                // 检查更新按钮
+                SettingsActionItem(
+                    title = "检查更新",
+                    description = if (isCheckingUpdate) "正在检查..." else "点击检查新版本",
+                    isLoading = isCheckingUpdate,
+                    onClick = {
+                        if (!isCheckingUpdate) {
+                            isCheckingUpdate = true
+                            coroutineScope.launch {
+                                val result = updateChecker.checkForUpdate(
+                                    currentVersion = versionName ?: "0.0.0",
+                                    channel = updateChannel,
+                                    ignoredVersions = emptySet()  // 手动检查时不跳过忽略的版本
+                                )
+                                isCheckingUpdate = false
+
+                                when (result) {
+                                    is UpdateChecker.CheckResult.UpdateAvailable -> {
+                                        updateInfo = result.updateInfo
+                                        showUpdateDialog = true
+                                    }
+                                    is UpdateChecker.CheckResult.UpToDate -> {
+                                        showUpToDateDialog = true
+                                    }
+                                    is UpdateChecker.CheckResult.Error -> {
+                                        updateCheckError = result.message
+                                    }
+                                }
+
+                                // 更新检查时间
+                                dataStoreManager.saveLastUpdateCheckTime(System.currentTimeMillis())
+                            }
+                        }
+                    }
+                )
+
+                HorizontalDivider()
+
+                // 自动检查更新开关
+                SettingsSwitchItem(
+                    title = "自动检查更新",
+                    description = "启动时自动检查新版本（每 24 小时一次）",
+                    checked = autoUpdateCheckEnabled,
+                    onCheckedChange = { enabled ->
+                        coroutineScope.launch {
+                            dataStoreManager.saveAutoUpdateCheckEnabled(enabled)
+                                .onFailure { e -> e.printStackTrace() }
+                        }
+                    }
+                )
+
+                HorizontalDivider()
+
+                // 更新通道选择
+                SettingsNavigationItem(
+                    title = "更新通道",
+                    description = when (updateChannel) {
+                        UpdateChannel.GITEE_FIRST -> "Gitee 优先"
+                        UpdateChannel.GITHUB_FIRST -> "GitHub 优先"
+                    },
+                    onClick = { showUpdateChannelDialog = true }
+                )
+            }
+
             // 关于设置分组
             SettingsGroup(title = "关于") {
                 // 版本信息
@@ -252,6 +339,60 @@ fun SettingsScreen(
                 }
                 showClearHistoryDialog = false
             }
+        )
+    }
+
+    // 更新通道选择对话框
+    if (showUpdateChannelDialog) {
+        UpdateChannelDialog(
+            currentChannel = updateChannel,
+            onDismiss = { showUpdateChannelDialog = false },
+            onChannelSelected = { selectedChannel ->
+                coroutineScope.launch {
+                    dataStoreManager.saveUpdateChannel(selectedChannel)
+                        .onFailure { e -> e.printStackTrace() }
+                }
+                showUpdateChannelDialog = false
+            }
+        )
+    }
+
+    // 更新提示对话框
+    if (showUpdateDialog && updateInfo != null) {
+        UpdateDialog(
+            currentVersion = versionName ?: "未知版本",
+            updateInfo = updateInfo!!,
+            onDismiss = {
+                showUpdateDialog = false
+                updateInfo = null
+            },
+            onIgnoreVersion = {
+                coroutineScope.launch {
+                    updateInfo?.let { info ->
+                        dataStoreManager.addIgnoredVersion(info.version)
+                            .onFailure { e -> e.printStackTrace() }
+                    }
+                }
+                showUpdateDialog = false
+                updateInfo = null
+            }
+        )
+    }
+
+    // 已是最新版本对话框
+    if (showUpToDateDialog) {
+        UpdateCheckResultDialog(
+            isUpToDate = true,
+            onDismiss = { showUpToDateDialog = false }
+        )
+    }
+
+    // 检查更新错误对话框
+    if (updateCheckError != null) {
+        UpdateCheckResultDialog(
+            isUpToDate = false,
+            errorMessage = updateCheckError,
+            onDismiss = { updateCheckError = null }
         )
     }
 }
@@ -614,6 +755,110 @@ fun ClearHistoryConfirmDialog(
             }
         },
         dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+/**
+ * 可操作的设置项（带加载状态）
+ */
+@Composable
+fun SettingsActionItem(
+    title: String,
+    description: String,
+    isLoading: Boolean = false,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = !isLoading, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                strokeWidth = 2.dp
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Default.Refresh,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+/**
+ * 更新通道选择对话框
+ */
+@Composable
+fun UpdateChannelDialog(
+    currentChannel: UpdateChannel,
+    onDismiss: () -> Unit,
+    onChannelSelected: (UpdateChannel) -> Unit
+) {
+    val options = listOf(
+        UpdateChannel.GITEE_FIRST to Pair("Gitee 优先", "先尝试 Gitee，失败后使用 GitHub（推荐国内用户）"),
+        UpdateChannel.GITHUB_FIRST to Pair("GitHub 优先", "先尝试 GitHub，失败后使用 Gitee（推荐海外用户）")
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(text = "选择更新通道")
+        },
+        text = {
+            Column {
+                options.forEach { (channel, info) ->
+                    val (name, description) = info
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onChannelSelected(channel) }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = channel == currentChannel,
+                            onClick = { onChannelSelected(channel) }
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = name,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
             TextButton(onClick = onDismiss) {
                 Text("取消")
             }
