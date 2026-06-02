@@ -18,6 +18,9 @@ build/
 # Local configuration
 local.properties
 
+# Gradle Daemon JVM toolchain（IDE 生成，绑定特定 JDK vendor，不入库以免拖慢 CI）
+gradle/gradle-daemon-jvm.properties
+
 # IDE files
 .idea/
 *.iml
