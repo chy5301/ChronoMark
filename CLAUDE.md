@@ -13,7 +13,7 @@ ChronoMark 是基于 Jetpack Compose 的 Android 时间记录应用，提供**�
 - Kotlin + Jetpack Compose + Material3
 - MVVM 架构 + StateFlow + Coroutines
 - 数据持久化: DataStore（设置/工作区）+ Room（历史记录）
-- 构建: Gradle Kotlin DSL，JDK 21 构建，Java 17 编译目标
+- 构建: Gradle 8.13 + AGP 8.13，JDK ≥17 均可（CI 用 Temurin 17，未声明 toolchain），Java 17 编译目标
 - 最低 SDK 26，目标 SDK 36
 
 ## 常用命令
@@ -24,6 +24,9 @@ ChronoMark 是基于 Jetpack Compose 的 Android 时间记录应用，提供**�
 ./gradlew assembleRelease    # Release APK（R8 混淆）
 ./gradlew test               # 单元测试
 ./gradlew lint               # Lint 检查
+./gradlew testDebugUnitTest --tests "*.EventViewModelTest"  # 只跑单个测试类
+./gradlew installDebug       # 安装到已连接的设备/模拟器
+./gradlew connectedDebugAndroidTest  # 仪器测试（需设备，含 HistoryDaoTest）
 ```
 
 ## CI/CD
@@ -61,6 +64,8 @@ app/src/main/java/io/github/chy5301/chronomark/
 
 - **依赖管理**: 使用 `gradle/libs.versions.toml`，通过 `libs.xxx` 引用
 - **时间精度**: 使用 `System.nanoTime()` 计时，每 10ms 更新显示
+- **ViewModel 创建**: 无 DI 框架，每个 ViewModel 配一个 `XxxViewModelFactory`，在对应 Screen 中通过 `viewModel(factory = ...)` 创建；新增 ViewModel 需同步新增 Factory
+- **Room 结构变更**: 提升 `AppDatabase` 的 `version`，添加对应 `Migration` 并注册到 `addMigrations`，同时提交 `app/schemas/` 下新生成的 JSON
 - **CHANGELOG**: 遵循 Keep a Changelog 格式，`[Unreleased]` 在顶部
 - **Git Commit**: Angular 规范，中文编写
 
