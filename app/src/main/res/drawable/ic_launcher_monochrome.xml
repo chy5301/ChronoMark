@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  自适应图标的单色层（Android 13+ 主题图标）。
+  使用纯黑版图标，内边距须与 ic_launcher_foreground 保持一致。
+-->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/app_icon_black_vector"
+    android:inset="18.5%" />

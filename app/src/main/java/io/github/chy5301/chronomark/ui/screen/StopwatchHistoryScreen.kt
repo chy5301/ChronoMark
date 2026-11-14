@@ -104,7 +104,7 @@ fun StopwatchHistoryScreen(
     var showDeleteSessionConfirm by remember { mutableStateOf(false) }
     var showEditTitleDialog by remember { mutableStateOf(false) }
     var selectedRecord by remember { mutableStateOf<TimeRecordEntity?>(null) }
-    var selectedRecordIndex by remember { mutableStateOf(0) }
+    var selectedRecordIndex by remember { mutableIntStateOf(0) }
     var showDeleteRecordConfirm by remember { mutableStateOf(false) }
     var showCalendarDialog by remember { mutableStateOf(false) }
 

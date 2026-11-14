@@ -1,7 +1,6 @@
 package io.github.chy5301.chronomark.ui.components.dialog
 
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import io.github.chy5301.chronomark.data.model.UpdateInfo
 
 /**
@@ -139,7 +139,7 @@ fun UpdateDialog(
             Button(
                 onClick = {
                     // 打开浏览器跳转到 Release 页面
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(updateInfo.htmlUrl))
+                    val intent = Intent(Intent.ACTION_VIEW, updateInfo.htmlUrl.toUri())
                     context.startActivity(intent)
                     onDismiss()
                 }

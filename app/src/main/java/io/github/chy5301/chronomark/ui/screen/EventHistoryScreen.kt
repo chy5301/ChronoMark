@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -92,7 +93,7 @@ fun EventHistoryScreen(
     // 对话框状态
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var selectedRecord by remember { mutableStateOf<TimeRecordEntity?>(null) }
-    var selectedRecordIndex by remember { mutableStateOf(0) }
+    var selectedRecordIndex by remember { mutableIntStateOf(0) }
     var showDeleteRecordConfirm by remember { mutableStateOf(false) }
     var showCalendarDialog by remember { mutableStateOf(false) }
 

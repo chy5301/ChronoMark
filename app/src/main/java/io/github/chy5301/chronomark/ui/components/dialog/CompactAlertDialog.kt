@@ -28,20 +28,20 @@ import androidx.compose.ui.window.Dialog
  * 保留 Material3 AlertDialog 的视觉风格（形状、颜色、阴影）。
  *
  * @param onDismissRequest 对话框关闭回调
+ * @param confirmButton 确认按钮
+ * @param modifier 修饰符
  * @param title 标题内容（可选）
  * @param text 主体内容（可选）
- * @param confirmButton 确认按钮
  * @param dismissButton 取消按钮（可选）
- * @param modifier 修饰符
  */
 @Composable
 fun CompactAlertDialog(
     onDismissRequest: () -> Unit,
+    confirmButton: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
     title: @Composable (() -> Unit)? = null,
     text: @Composable (() -> Unit)? = null,
-    confirmButton: @Composable () -> Unit,
-    dismissButton: @Composable (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    dismissButton: @Composable (() -> Unit)? = null
 ) {
     Dialog(onDismissRequest = onDismissRequest) {
         Surface(
