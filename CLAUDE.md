@@ -10,11 +10,11 @@ ChronoMark 是基于 Jetpack Compose 的 Android 时间记录应用，提供**�
 
 ## 技术栈
 
-- Kotlin + Jetpack Compose + Material3
+- Kotlin 2.4 + Jetpack Compose + Material3
 - MVVM 架构 + StateFlow + Coroutines
 - 数据持久化: DataStore（设置/工作区）+ Room（历史记录）
-- 构建: Gradle 8.13 + AGP 8.13，JDK ≥17 均可（CI 用 Temurin 17，未声明 toolchain），Java 17 编译目标
-- 最低 SDK 26，目标 SDK 36
+- 构建: Gradle 9.9 + AGP 9.5（内置 Kotlin 支持，不再应用 `org.jetbrains.kotlin.android` 插件），KSP2 生成 Room 代码；JDK ≥17 均可（CI 用 Temurin 17，未声明 toolchain），Java 17 编译目标
+- 最低 SDK 26，编译 SDK 37，目标 SDK 36
 
 ## 常用命令
 
