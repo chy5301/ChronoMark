@@ -54,6 +54,7 @@ class DataStoreManager(private val context: Context) {
         private val KEY_STOPWATCH_ANCHOR_REALTIME_NANOS = longPreferencesKey("stopwatch_anchor_realtime_nanos")
         private val KEY_STOPWATCH_ANCHOR_WALL_MILLIS = longPreferencesKey("stopwatch_anchor_wall_millis")
         private val KEY_STOPWATCH_START_WALL_MILLIS = longPreferencesKey("stopwatch_start_wall_millis")
+        private val KEY_STOPWATCH_ANCHOR_BOOT_COUNT = intPreferencesKey("stopwatch_anchor_boot_count")
 
         // 事件模式数据
         private val KEY_EVENT_RECORDS = stringPreferencesKey("event_records")
@@ -383,6 +384,7 @@ class DataStoreManager(private val context: Context) {
                 preferences[KEY_STOPWATCH_ANCHOR_REALTIME_NANOS] = timing.anchorRealtimeNanos
                 preferences[KEY_STOPWATCH_ANCHOR_WALL_MILLIS] = timing.anchorWallMillis
                 preferences[KEY_STOPWATCH_START_WALL_MILLIS] = timing.startWallMillis
+                preferences[KEY_STOPWATCH_ANCHOR_BOOT_COUNT] = timing.anchorBootCount
                 preferences[KEY_STOPWATCH_RECORDS] = json.encodeToString(records)
                 // 旧格式的已计时长已被新字段取代
                 preferences.remove(KEY_STOPWATCH_PAUSE_TIMESTAMP)
@@ -433,7 +435,9 @@ class DataStoreManager(private val context: Context) {
                     accumulatedNanos = accumulated,
                     anchorRealtimeNanos = preferences[KEY_STOPWATCH_ANCHOR_REALTIME_NANOS] ?: 0L,
                     anchorWallMillis = preferences[KEY_STOPWATCH_ANCHOR_WALL_MILLIS] ?: 0L,
-                    startWallMillis = preferences[KEY_STOPWATCH_START_WALL_MILLIS] ?: 0L
+                    startWallMillis = preferences[KEY_STOPWATCH_START_WALL_MILLIS] ?: 0L,
+                    anchorBootCount = preferences[KEY_STOPWATCH_ANCHOR_BOOT_COUNT]
+                        ?: StopwatchTiming.UNKNOWN_BOOT_COUNT
                 )
             } else {
                 StopwatchTiming(accumulatedNanos = preferences[KEY_STOPWATCH_PAUSE_TIMESTAMP] ?: 0L)
@@ -685,6 +689,7 @@ class DataStoreManager(private val context: Context) {
                 preferences.remove(KEY_STOPWATCH_ANCHOR_REALTIME_NANOS)
                 preferences.remove(KEY_STOPWATCH_ANCHOR_WALL_MILLIS)
                 preferences.remove(KEY_STOPWATCH_START_WALL_MILLIS)
+                preferences.remove(KEY_STOPWATCH_ANCHOR_BOOT_COUNT)
                 preferences.remove(KEY_STOPWATCH_PAUSE_TIMESTAMP)
                 // 清除已废弃的 key（兼容旧版本数据）
                 preferences.remove(KEY_STOPWATCH_START_TIME)

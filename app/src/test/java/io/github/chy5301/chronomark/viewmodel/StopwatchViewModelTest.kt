@@ -14,7 +14,9 @@ import io.mockk.mockkStatic
 import io.mockk.slot
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.Dispatchers
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -23,6 +25,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -75,9 +78,17 @@ class StopwatchViewModelTest {
         every { dataStore.stopwatchRecordsFlow } returns flowOf(records)
     }
 
-    private fun TestScope.createViewModel() {
-        viewModel = StopwatchViewModel(dataStore, history, { nowRealtime }, { nowWall })
-        testScheduler.runCurrent()
+    private var nowBootCount = 5
+    private var realtimeReads = 0
+
+    private fun TestScope.createViewModel(runInit: Boolean = true) {
+        viewModel = StopwatchViewModel(
+            dataStore, history,
+            realtimeNanos = { realtimeReads++; nowRealtime },
+            wallClockMillis = { nowWall },
+            bootCount = { nowBootCount }
+        )
+        if (runInit) testScheduler.runCurrent()
     }
 
     private fun advance(seconds: Long) {
@@ -86,18 +97,15 @@ class StopwatchViewModelTest {
     }
 
     /**
-     * 包装 runTest：无论断言是否失败，都在 finally 中调用 onCleared 取消 ViewModel 的无限循环协程。
+     * 包装 runTest：无论断言是否失败，都在 finally 中取消 ViewModel 的全部协程（含无限循环），
      * 否则 runTest 收尾时会在虚拟时间里无限推进这些循环，测试进程永远卡住。
      */
     private fun vmTest(body: suspend TestScope.() -> Unit) = runTest(testDispatcher) {
         try {
             body()
         } finally {
-            if (::viewModel.isInitialized) {
-                val m = viewModel::class.java.getDeclaredMethod("onCleared")
-                m.isAccessible = true
-                m.invoke(viewModel)
-            }
+            // 取消整个 viewModelScope（而非只调 onCleared），连没有被持有句柄的协程也一并取消
+            if (::viewModel.isInitialized) viewModel.viewModelScope.cancel()
         }
     }
 
@@ -217,4 +225,86 @@ class StopwatchViewModelTest {
                 history.archiveStopwatchRecords(any(), "旧会话", baseWall + 1_000, 10 * sec)
             }
         }
+
+    // ========== 开机次数、时长上限、计时循环 ==========
+
+    @Test
+    fun `start - records boot count with the anchor`() = vmTest {
+        nowBootCount = 7
+        createViewModel()
+
+        viewModel.start()
+        testScheduler.runCurrent()
+
+        val timing = slot<StopwatchTiming>()
+        coVerify { dataStore.saveStopwatchSnapshot(StopwatchStatus.Running, capture(timing), any()) }
+        assertEquals(7, timing.captured.anchorBootCount)
+    }
+
+    @Test
+    fun `restore in same boot after clock set forward - counts only real elapsed time`() = vmTest {
+        givenSaved(
+            StopwatchStatus.Running,
+            StopwatchTiming(
+                accumulatedNanos = 5 * sec,
+                anchorRealtimeNanos = nowRealtime,
+                anchorWallMillis = nowWall,
+                startWallMillis = baseWall,
+                anchorBootCount = 5
+            ),
+            emptyList()
+        )
+        nowRealtime += 60 * sec
+        nowWall += 2 * 60 * 60 * 1000L // 用户把系统时间往后调了 2 小时
+
+        createViewModel()
+
+        assertEquals(65 * sec, viewModel.uiState.value.currentTimeNanos)
+    }
+
+    @Test
+    fun `restore with implausible catch-up over a year - keeps saved time and pauses`() = vmTest {
+        givenSaved(
+            StopwatchStatus.Running,
+            StopwatchTiming(
+                accumulatedNanos = 5 * sec,
+                anchorRealtimeNanos = nowRealtime,
+                anchorWallMillis = nowWall,
+                startWallMillis = baseWall,
+                anchorBootCount = 4
+            ),
+            emptyList()
+        )
+        // 重启后墙上时间被校正了好几年（例如锚点是在时钟错误时保存的）
+        nowWall += 3L * 365 * 24 * 60 * 60 * 1000
+
+        createViewModel()
+
+        assertEquals(StopwatchStatus.Paused, viewModel.uiState.value.status)
+        assertEquals(5 * sec, viewModel.uiState.value.currentTimeNanos)
+    }
+
+    @Test
+    fun `start tapped before saved running state loads - only one refresh loop runs`() = vmTest {
+        givenSaved(
+            StopwatchStatus.Running,
+            StopwatchTiming(
+                accumulatedNanos = 5 * sec,
+                anchorRealtimeNanos = nowRealtime,
+                anchorWallMillis = nowWall,
+                startWallMillis = baseWall,
+                anchorBootCount = 5
+            ),
+            emptyList()
+        )
+        createViewModel(runInit = false)
+        viewModel.start()
+        testScheduler.runCurrent()
+
+        realtimeReads = 0
+        testScheduler.advanceTimeBy(1_000)
+
+        // 10ms 刷新一次，1 秒内单个循环约 100 次；若残留第二个循环会接近 200 次
+        assertTrue("realtime reads = $realtimeReads", realtimeReads <= 110)
+    }
 }

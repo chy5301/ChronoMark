@@ -1,6 +1,7 @@
 package io.github.chy5301.chronomark.ui.screen
 
 import android.app.Activity
+import android.provider.Settings as SystemSettings
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
@@ -25,6 +26,7 @@ import io.github.chy5301.chronomark.data.DataStoreManager
 import io.github.chy5301.chronomark.data.database.AppDatabase
 import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.AppMode
+import io.github.chy5301.chronomark.data.model.StopwatchTiming
 import io.github.chy5301.chronomark.ui.components.navigation.ModeNavigationBar
 import io.github.chy5301.chronomark.viewmodel.EventViewModel
 import io.github.chy5301.chronomark.viewmodel.EventViewModelFactory
@@ -56,7 +58,14 @@ fun WorkspaceScreen(
 
     // 创建两个 ViewModel（根据模式使用对应的）
     val stopwatchViewModel: StopwatchViewModel = viewModel(
-        factory = StopwatchViewModelFactory(dataStoreManager, historyRepository)
+        factory = StopwatchViewModelFactory(dataStoreManager, historyRepository) {
+            // 系统开机次数，用于判断秒表锚点之后是否重启过；读取失败时为未知
+            SystemSettings.Global.getInt(
+                context.applicationContext.contentResolver,
+                SystemSettings.Global.BOOT_COUNT,
+                StopwatchTiming.UNKNOWN_BOOT_COUNT
+            )
+        }
     )
     val eventViewModel: EventViewModel = viewModel(
         factory = EventViewModelFactory(dataStoreManager, historyRepository)

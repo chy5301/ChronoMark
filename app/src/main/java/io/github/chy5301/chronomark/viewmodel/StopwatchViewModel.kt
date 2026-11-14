@@ -29,11 +29,15 @@ class StopwatchViewModel(
     private val dataStoreManager: DataStoreManager,
     private val historyRepository: HistoryRepository,
     private val realtimeNanos: () -> Long = SystemClock::elapsedRealtimeNanos,
-    private val wallClockMillis: () -> Long = System::currentTimeMillis
+    private val wallClockMillis: () -> Long = System::currentTimeMillis,
+    private val bootCount: () -> Int = { StopwatchTiming.UNKNOWN_BOOT_COUNT }
 ) : ViewModel() {
 
     companion object {
         private const val TAG = "StopwatchViewModel"
+
+        /** 合理的最长计时（1 年），超过视为数据或时钟异常 */
+        private const val MAX_REASONABLE_NANOS = 365L * 24 * 60 * 60 * 1_000_000_000L
     }
 
     // UI 状态
@@ -67,7 +71,8 @@ class StopwatchViewModel(
             accumulatedNanos = 0L,
             anchorRealtimeNanos = realtimeNanos(),
             anchorWallMillis = nowWall,
-            startWallMillis = nowWall
+            startWallMillis = nowWall,
+            anchorBootCount = bootCount()
         )
         _uiState.update { it.copy(status = StopwatchStatus.Running) }
         startTimerTicking()
@@ -95,7 +100,8 @@ class StopwatchViewModel(
 
         timing = timing.copy(
             anchorRealtimeNanos = realtimeNanos(),
-            anchorWallMillis = wallClockMillis()
+            anchorWallMillis = wallClockMillis(),
+            anchorBootCount = bootCount()
         )
         _uiState.update { it.copy(status = StopwatchStatus.Running) }
         startTimerTicking()
@@ -200,6 +206,8 @@ class StopwatchViewModel(
      * 启动计时器刻度
      */
     private fun startTimerTicking() {
+        // 先取消旧循环：例如冷启动时用户在恢复完成前点了「开始」，恢复逻辑会再次启动循环
+        timerJob?.cancel()
         timerJob = viewModelScope.launch {
             while (isActive) {
                 delay(10) // 每 10ms 更新一次
@@ -265,28 +273,39 @@ class StopwatchViewModel(
             if (savedStatus is StopwatchStatus.Idle) return@launch
 
             // 数据验证：已计时长为负或超过 1 年视为数据损坏，清除并重置
-            val maxReasonableNanos = 365L * 24 * 60 * 60 * 1_000_000_000L
-            if (savedTiming.accumulatedNanos !in 0..maxReasonableNanos) {
+            if (savedTiming.accumulatedNanos !in 0..MAX_REASONABLE_NANOS) {
                 reset()
                 return@launch
             }
 
-            if (savedStatus is StopwatchStatus.Running && savedTiming.hasAnchor) {
+            val nowRealtime = realtimeNanos()
+            val nowWall = wallClockMillis()
+            val nowBootCount = bootCount()
+            val restoredElapsed = if (savedStatus is StopwatchStatus.Running && savedTiming.hasAnchor) {
+                savedTiming.accumulatedNanos +
+                    savedTiming.elapsedSinceAnchorNanos(nowRealtime, nowWall, nowBootCount)
+            } else {
+                null
+            }
+
+            if (restoredElapsed != null && restoredElapsed <= MAX_REASONABLE_NANOS) {
                 // 进程在计时中被杀死：补上停止运行期间经过的时间，并以当前时刻为新锚点继续计时
-                val nowRealtime = realtimeNanos()
-                val nowWall = wallClockMillis()
                 timing = savedTiming.copy(
-                    accumulatedNanos = savedTiming.accumulatedNanos +
-                        savedTiming.elapsedSinceAnchorNanos(nowRealtime, nowWall),
+                    accumulatedNanos = restoredElapsed,
                     anchorRealtimeNanos = nowRealtime,
-                    anchorWallMillis = nowWall
+                    anchorWallMillis = nowWall,
+                    anchorBootCount = nowBootCount
                 )
                 _uiState.update { it.copy(status = StopwatchStatus.Running, records = savedRecords) }
                 updateCurrentTime()
                 startTimerTicking()
                 saveCurrentState()
             } else {
-                // 旧版数据没有锚点，无法得知计时中断的时刻，运行中的状态降级为暂停
+                // 无法可靠得知中断期间的时长（旧版数据没有锚点，或补算结果超过 1 年，多为时钟曾经错误），
+                // 保留已保存的时长，运行中的状态降级为暂停
+                if (restoredElapsed != null) {
+                    Log.w(TAG, "Implausible restored elapsed time ($restoredElapsed ns), restoring as paused")
+                }
                 timing = savedTiming
                 val newStatus = if (savedStatus is StopwatchStatus.Running) StopwatchStatus.Paused else savedStatus
                 _uiState.update { it.copy(status = newStatus, records = savedRecords) }

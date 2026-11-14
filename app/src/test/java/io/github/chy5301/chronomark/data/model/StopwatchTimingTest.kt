@@ -56,6 +56,41 @@ class StopwatchTimingTest {
     }
 
     @Test
+    fun `same boot count - wall clock jumped forward - still uses realtime delta`() {
+        val timing = StopwatchTiming(
+            anchorRealtimeNanos = 100 * sec,
+            anchorWallMillis = 1_700_000_000_000L,
+            anchorBootCount = 5
+        )
+
+        // 同一次开机内，用户把时间往后调了 2 小时
+        val elapsed = timing.elapsedSinceAnchorNanos(
+            nowRealtimeNanos = 160 * sec,
+            nowWallMillis = 1_700_007_260_000L,
+            nowBootCount = 5
+        )
+
+        assertEquals(60 * sec, elapsed)
+    }
+
+    @Test
+    fun `different boot count - uses wall clock delta even if realtime delta looks plausible`() {
+        val timing = StopwatchTiming(
+            anchorRealtimeNanos = 100 * sec,
+            anchorWallMillis = 1_700_000_000_000L,
+            anchorBootCount = 5
+        )
+
+        val elapsed = timing.elapsedSinceAnchorNanos(
+            nowRealtimeNanos = 130 * sec,
+            nowWallMillis = 1_700_000_050_000L,
+            nowBootCount = 6
+        )
+
+        assertEquals(50 * sec, elapsed)
+    }
+
+    @Test
     fun `both clocks go backwards - never negative`() {
         val timing = StopwatchTiming(
             anchorRealtimeNanos = 10_000 * sec,

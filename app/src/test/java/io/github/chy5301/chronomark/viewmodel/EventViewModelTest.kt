@@ -11,7 +11,9 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.Dispatchers
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -113,18 +115,15 @@ class EventViewModelTest {
     }
 
     /**
-     * 包装 runTest：无论断言是否失败，都在 finally 中调用 onCleared 取消墙上时钟的无限循环，
+     * 包装 runTest：无论断言是否失败，都在 finally 中取消 ViewModel 的全部协程（含无限循环），
      * 否则 runTest 收尾时会在虚拟时间里无限推进该循环，测试进程永远卡住。
      */
     private fun vmTest(body: suspend TestScope.() -> Unit) = runTest(testDispatcher) {
         try {
             body()
         } finally {
-            if (::viewModel.isInitialized) {
-                val m = viewModel::class.java.getDeclaredMethod("onCleared")
-                m.isAccessible = true
-                m.invoke(viewModel)
-            }
+            // 取消整个 viewModelScope（而非只调 onCleared），连没有被持有句柄的协程也一并取消
+            if (::viewModel.isInitialized) viewModel.viewModelScope.cancel()
         }
     }
 
