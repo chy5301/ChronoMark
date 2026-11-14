@@ -7,6 +7,7 @@ import io.github.chy5301.chronomark.data.database.entity.TimeRecordEntity
 import io.github.chy5301.chronomark.data.model.SessionType
 import io.github.chy5301.chronomark.data.model.TimeRecord
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
 import java.util.UUID
@@ -23,6 +24,15 @@ class HistoryRepository(
 
     companion object {
         private const val TAG = "HistoryRepository"
+    }
+
+    /**
+     * 订阅查询出错（如磁盘已满、I/O 错误）时记录日志并推送空列表，避免异常传到 ViewModel 导致崩溃，
+     * 与一次性查询出错返回空列表的处理保持一致
+     */
+    private fun <T> Flow<List<T>>.emptyOnError(what: String): Flow<List<T>> = catch { e ->
+        Log.e(TAG, "Failed to observe $what", e)
+        emit(emptyList())
     }
 
     // ========== 归档操作 ==========
@@ -140,7 +150,7 @@ class HistoryRepository(
                     note = entity.note
                 )
             }
-        }
+        }.emptyOnError("event records of $date")
     }
 
     /**
@@ -307,7 +317,7 @@ class HistoryRepository(
         date: String,
         sessionType: SessionType
     ): Flow<List<HistorySessionEntity>> {
-        return historyDao.getSessionsByDate(date, sessionType)
+        return historyDao.getSessionsByDate(date, sessionType).emptyOnError("sessions of $date")
     }
 
     /**
@@ -317,7 +327,7 @@ class HistoryRepository(
      * @return Flow 包装的记录列表
      */
     fun getRecordsBySessionId(sessionId: String): Flow<List<TimeRecordEntity>> {
-        return historyDao.getRecordsBySessionId(sessionId)
+        return historyDao.getRecordsBySessionId(sessionId).emptyOnError("records of session $sessionId")
     }
 
     /**
@@ -327,7 +337,7 @@ class HistoryRepository(
      * @return Flow 包装的日期字符串列表
      */
     fun getDatesWithRecords(sessionType: SessionType): Flow<List<String>> {
-        return historyDao.getDatesWithRecords(sessionType)
+        return historyDao.getDatesWithRecords(sessionType).emptyOnError("dates with records")
     }
 
     // ========== 更新操作 ==========

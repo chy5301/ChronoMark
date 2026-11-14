@@ -188,6 +188,22 @@ class HistoryRepositoryTest {
         )
     }
 
+    // ========== 订阅查询的异常处理 ==========
+
+    @Test
+    fun `observed queries - database error - emit empty list instead of throwing`() = runTest {
+        val error = android.database.sqlite.SQLiteException("disk I/O error")
+        every { mockDao.observeEventRecordsByDate(any()) } returns kotlinx.coroutines.flow.flow { throw error }
+        every { mockDao.getSessionsByDate(any(), any()) } returns kotlinx.coroutines.flow.flow { throw error }
+        every { mockDao.getRecordsBySessionId(any()) } returns kotlinx.coroutines.flow.flow { throw error }
+        every { mockDao.getDatesWithRecords(any()) } returns kotlinx.coroutines.flow.flow { throw error }
+
+        assertEquals(listOf(emptyList<TimeRecord>()), repository.observeEventRecordsByDate("2025-01-15").toList())
+        assertEquals(listOf(emptyList<HistorySessionEntity>()), repository.getSessionsByDate("2025-01-15", SessionType.EVENT).toList())
+        assertEquals(listOf(emptyList<TimeRecordEntity>()), repository.getRecordsBySessionId("s").toList())
+        assertEquals(listOf(emptyList<String>()), repository.getDatesWithRecords(SessionType.EVENT).toList())
+    }
+
     // ========== getEventRecordsByDate 测试 ==========
 
     @Test
