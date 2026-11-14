@@ -1,6 +1,7 @@
 package io.github.chy5301.chronomark.viewmodel
 
 import android.util.Log
+import io.github.chy5301.chronomark.data.DataStoreManager
 import io.github.chy5301.chronomark.data.database.entity.HistorySessionEntity
 import io.github.chy5301.chronomark.data.database.entity.TimeRecordEntity
 import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
@@ -22,6 +23,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * 历史页 ViewModel 的数据订阅测试
@@ -37,6 +39,15 @@ class HistoryViewModelFlowTest {
     private val yesterday = today.minusDays(1)
 
     private lateinit var repository: HistoryRepository
+    private lateinit var dataStore: DataStoreManager
+
+    /** 事件历史页使用的墙上时钟，默认今天中午（分界点 04:00 时逻辑日期即今天） */
+    private var nowMillis = millisOf(today, 12, 0)
+
+    private fun millisOf(date: LocalDate, hour: Int, minute: Int) =
+        date.atTime(hour, minute).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+    private fun eventHistoryViewModel() = EventHistoryViewModel(repository, dataStore) { nowMillis }
     private val sessionFlows = mutableMapOf<Pair<String, SessionType>, MutableStateFlow<List<HistorySessionEntity>>>()
     private val recordFlows = mutableMapOf<String, MutableStateFlow<List<TimeRecordEntity>>>()
 
@@ -54,6 +65,10 @@ class HistoryViewModelFlowTest {
         }
         every { repository.getRecordsBySessionId(any()) } answers { recordsOf(firstArg()) }
         every { repository.getDatesWithRecords(any()) } returns flowOf(emptyList())
+
+        dataStore = mockk(relaxed = true)
+        every { dataStore.archiveBoundaryHourFlow } returns flowOf(4)
+        every { dataStore.archiveBoundaryMinuteFlow } returns flowOf(0)
     }
 
     @After
@@ -162,7 +177,7 @@ class HistoryViewModelFlowTest {
             sessionsOf(yesterday.toString(), type).value = listOf(session("y", yesterday, type))
             recordsOf("t").value = listOf(record("rt", "t"))
             recordsOf("y").value = listOf(record("ry", "y"))
-            val vm = EventHistoryViewModel(repository)
+            val vm = eventHistoryViewModel()
             testScheduler.runCurrent()
 
             vm.goToPreviousDay()
@@ -175,5 +190,51 @@ class HistoryViewModelFlowTest {
 
             assertEquals(listOf("t"), vm.uiState.value.sessions.map { it.id })
             assertEquals(listOf("rt"), vm.uiState.value.selectedSessionRecords.map { it.id })
+        }
+
+    // ========== 事件历史：默认日期使用逻辑日期 ==========
+
+    @Test
+    fun `event - opened before day boundary - defaults to logical date (previous calendar day)`() =
+        runTest(testDispatcher) {
+            nowMillis = millisOf(today, 2, 30)
+            val type = SessionType.EVENT
+            sessionsOf(yesterday.toString(), type).value = listOf(session("late", yesterday, type))
+            recordsOf("late").value = listOf(record("r", "late"))
+
+            val vm = eventHistoryViewModel()
+            testScheduler.runCurrent()
+
+            assertEquals(yesterday, vm.uiState.value.selectedDate)
+            assertEquals(listOf("r"), vm.uiState.value.selectedSessionRecords.map { it.id })
+        }
+
+    @Test
+    fun `event - reopened on the same logical day - keeps the date the user picked`() =
+        runTest(testDispatcher) {
+            val vm = eventHistoryViewModel()
+            testScheduler.runCurrent()
+            val picked = today.minusDays(5)
+            vm.selectDate(picked)
+            testScheduler.runCurrent()
+
+            nowMillis += 60 * 60 * 1000L
+            vm.onScreenShown()
+            testScheduler.runCurrent()
+
+            assertEquals(picked, vm.uiState.value.selectedDate)
+        }
+
+    @Test
+    fun `event - reopened after logical day changed - jumps to the new day`() =
+        runTest(testDispatcher) {
+            val vm = eventHistoryViewModel()
+            testScheduler.runCurrent()
+
+            nowMillis = millisOf(today.plusDays(1), 10, 0)
+            vm.onScreenShown()
+            testScheduler.runCurrent()
+
+            assertEquals(today.plusDays(1), vm.uiState.value.selectedDate)
         }
 }

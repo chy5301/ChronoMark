@@ -3,14 +3,17 @@ package io.github.chy5301.chronomark.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.chy5301.chronomark.data.DataStoreManager
 import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.EventHistoryUiState
 import io.github.chy5301.chronomark.data.model.SessionType
+import io.github.chy5301.chronomark.util.ArchiveUtils
 import io.github.chy5301.chronomark.util.ShareHelper
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -22,7 +25,9 @@ import java.time.LocalDate
  * 事件模式特点：一天一个会话（自动归档），无需会话选择器。
  */
 class EventHistoryViewModel(
-    private val historyRepository: HistoryRepository
+    private val historyRepository: HistoryRepository,
+    private val dataStoreManager: DataStoreManager,
+    private val wallClockMillis: () -> Long = System::currentTimeMillis
 ) : ViewModel() {
 
     companion object {
@@ -37,10 +42,39 @@ class EventHistoryViewModel(
     private var sessionsJob: Job? = null
     private var recordsJob: Job? = null
 
+    // 上一次自动定位到的「逻辑今天」，用于判断是否已跨过逻辑日期
+    private var lastLogicalToday: LocalDate? = null
+
     init {
-        // 初始化：加载今天的会话列表和有记录的日期
-        loadSessionsForDate(_uiState.value.selectedDate)
+        // 初始化：定位到逻辑上的今天（与事件页一致），并加载有记录的日期
+        jumpToLogicalTodayIfChanged()
         loadDatesWithRecords()
+    }
+
+    /**
+     * 历史页每次显示时调用
+     *
+     * ViewModel 的生命周期跟随 Activity，应用长时间不退出时，逻辑日期可能已变化；
+     * 此时自动跳到新的一天。同一逻辑日内不改动，保留用户自己选择的日期。
+     */
+    fun onScreenShown() {
+        jumpToLogicalTodayIfChanged()
+    }
+
+    private fun jumpToLogicalTodayIfChanged() {
+        viewModelScope.launch {
+            val boundaryTime = ArchiveUtils.createBoundaryTime(
+                dataStoreManager.archiveBoundaryHourFlow.first(),
+                dataStoreManager.archiveBoundaryMinuteFlow.first()
+            )
+            // 事件记录按逻辑日期归档（分界点前属于前一天），默认日期必须用同一规则，
+            // 否则凌晨打开历史页会落在日历上的今天，看不到刚记的记录
+            val logicalToday = ArchiveUtils.getLogicalDate(wallClockMillis(), boundaryTime)
+            if (logicalToday != lastLogicalToday) {
+                lastLogicalToday = logicalToday
+                selectDate(logicalToday)
+            }
+        }
     }
 
     /**
