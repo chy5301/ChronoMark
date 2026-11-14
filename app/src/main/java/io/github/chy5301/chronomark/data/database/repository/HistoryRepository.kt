@@ -7,6 +7,7 @@ import io.github.chy5301.chronomark.data.database.entity.TimeRecordEntity
 import io.github.chy5301.chronomark.data.model.SessionType
 import io.github.chy5301.chronomark.data.model.TimeRecord
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import java.time.LocalDate
 import java.util.UUID
 
@@ -121,6 +122,26 @@ class HistoryRepository(
     }
 
     // ========== 实时同步操作（事件模式）==========
+
+    /**
+     * 订阅指定日期的事件记录，数据库变化（新增、删除、改备注、清空历史）时自动推送
+     *
+     * @param date 日期字符串（格式：yyyy-MM-dd）
+     * @return 按时间升序的记录列表 Flow（领域模型）
+     */
+    fun observeEventRecordsByDate(date: String): Flow<List<TimeRecord>> {
+        return historyDao.observeEventRecordsByDate(date).map { entities ->
+            entities.map { entity ->
+                TimeRecord(
+                    id = entity.id,
+                    wallClockTime = entity.wallClockTime,
+                    elapsedTimeNanos = entity.elapsedTimeNanos,
+                    splitTimeNanos = entity.splitTimeNanos,
+                    note = entity.note
+                )
+            }
+        }
+    }
 
     /**
      * 按日期查询事件记录（用于加载今天的记录）

@@ -16,6 +16,7 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.slot
 import io.mockk.unmockkStatic
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -165,6 +166,26 @@ class HistoryRepositoryTest {
         assertTrue(result.isSuccess)
         coVerify(exactly = 1) { mockDao.insertRecords(any()) }
         assertEquals(3, recordsSlot.captured.size)
+    }
+
+    // ========== observeEventRecordsByDate 测试 ==========
+
+    @Test
+    fun `observeEventRecordsByDate - maps every emission to domain records`() = runTest {
+        val date = "2025-01-15"
+        val entity = TimeRecordEntity(
+            id = "id-1", sessionId = "s", wallClockTime = 1705280400000L,
+            elapsedTimeNanos = 0L, splitTimeNanos = 5L, note = "n"
+        )
+        every { mockDao.observeEventRecordsByDate(date) } returns
+            kotlinx.coroutines.flow.flowOf(listOf(entity), emptyList())
+
+        val emissions = repository.observeEventRecordsByDate(date).toList()
+
+        assertEquals(
+            listOf(listOf(TimeRecord(id = "id-1", wallClockTime = 1705280400000L, elapsedTimeNanos = 0L, splitTimeNanos = 5L, note = "n")), emptyList()),
+            emissions
+        )
     }
 
     // ========== getEventRecordsByDate 测试 ==========
