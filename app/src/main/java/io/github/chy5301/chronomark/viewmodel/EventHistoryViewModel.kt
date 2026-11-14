@@ -7,6 +7,7 @@ import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.EventHistoryUiState
 import io.github.chy5301.chronomark.data.model.SessionType
 import io.github.chy5301.chronomark.util.ShareHelper
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,6 +32,10 @@ class EventHistoryViewModel(
     // UI 状态
     private val _uiState = MutableStateFlow(EventHistoryUiState())
     val uiState: StateFlow<EventHistoryUiState> = _uiState.asStateFlow()
+
+    // 当前日期的会话订阅与记录订阅；切换日期时必须取消旧订阅，否则旧查询会在数据库变化时覆盖界面
+    private var sessionsJob: Job? = null
+    private var recordsJob: Job? = null
 
     init {
         // 初始化：加载今天的会话列表和有记录的日期
@@ -74,7 +79,6 @@ class EventHistoryViewModel(
             historyRepository.deleteSessionsByDateAndType(date, SessionType.EVENT)
                 .onSuccess {
                     Log.i(TAG, "Deleted all event sessions for $date")
-                    loadSessionsForDate(_uiState.value.selectedDate)
                 }
                 .onFailure { e ->
                     Log.e(TAG, "Failed to delete event sessions", e)
@@ -90,8 +94,6 @@ class EventHistoryViewModel(
             historyRepository.deleteRecord(recordId)
                 .onSuccess {
                     Log.i(TAG, "Deleted record $recordId")
-                    // 重新加载记录列表
-                    loadRecordsForCurrentSession()
                 }
                 .onFailure { e ->
                     Log.e(TAG, "Failed to delete record", e)
@@ -107,8 +109,6 @@ class EventHistoryViewModel(
             historyRepository.updateRecordNote(recordId, newNote)
                 .onSuccess {
                     Log.i(TAG, "Updated record note")
-                    // 重新加载记录列表
-                    loadRecordsForCurrentSession()
                 }
                 .onFailure { e ->
                     Log.e(TAG, "Failed to update record note", e)
@@ -137,46 +137,32 @@ class EventHistoryViewModel(
      * 加载指定日期的会话列表（事件模式）
      */
     private fun loadSessionsForDate(date: LocalDate) {
-        viewModelScope.launch {
+        sessionsJob?.cancel()
+        recordsJob?.cancel()
+        sessionsJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
 
-            val dateString = date.toString()
-
-            // 使用 Flow 收集会话列表
-            historyRepository.getSessionsByDate(dateString, SessionType.EVENT)
+            // 订阅会话列表，数据库变化时自动更新
+            historyRepository.getSessionsByDate(date.toString(), SessionType.EVENT)
                 .collect { sessions ->
-                    _uiState.update {
-                        it.copy(
-                            sessions = sessions,
-                            isLoading = false
-                        )
-                    }
-
-                    // 如果有会话，加载会话的记录
-                    if (sessions.isNotEmpty()) {
-                        loadRecordsForCurrentSession()
-                    } else {
-                        _uiState.update { it.copy(selectedSessionRecords = emptyList()) }
-                    }
+                    _uiState.update { it.copy(sessions = sessions, isLoading = false) }
+                    loadRecordsForCurrentSession()
                 }
         }
     }
 
     /**
-     * 加载当前会话的记录列表（事件模式一天只有一个会话）
+     * 订阅当前会话的记录列表（事件模式一天只有一个会话）
      */
     private fun loadRecordsForCurrentSession() {
-        viewModelScope.launch {
-            val sessions = _uiState.value.sessions
-            if (sessions.isEmpty()) {
-                _uiState.update { it.copy(selectedSessionRecords = emptyList()) }
-                return@launch
-            }
+        recordsJob?.cancel()
+        val currentSession = _uiState.value.sessions.firstOrNull()
+        if (currentSession == null) {
+            _uiState.update { it.copy(selectedSessionRecords = emptyList()) }
+            return
+        }
 
-            // 事件模式一天只有一个会话，取第一个
-            val currentSession = sessions.first()
-
-            // 使用 Flow 收集记录列表
+        recordsJob = viewModelScope.launch {
             historyRepository.getRecordsBySessionId(currentSession.id)
                 .collect { records ->
                     _uiState.update { it.copy(selectedSessionRecords = records) }
