@@ -221,7 +221,6 @@ class EventViewModel(
     }
 
     override fun onCleared() {
-        super.onCleared()
         wallClockJob?.cancel()
         wallClockJob = null
     }

@@ -42,9 +42,9 @@ abstract class AppDatabase : RoomDatabase() {
          * 移除 time_records 表中的 index 列（序号改为动态计算）
          */
         private val MIGRATION_1_2 = object : Migration(1, 2) {
-            override fun migrate(database: SupportSQLiteDatabase) {
+            override fun migrate(db: SupportSQLiteDatabase) {
                 // SQLite 不支持直接删除列，需要重建表
-                database.execSQL(
+                db.execSQL(
                     """
                     CREATE TABLE time_records_new (
                         id TEXT NOT NULL PRIMARY KEY,
@@ -57,16 +57,16 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
-                database.execSQL(
+                db.execSQL(
                     """
                     INSERT INTO time_records_new (id, session_id, wall_clock_time, elapsed_time_nanos, split_time_nanos, note)
                     SELECT id, session_id, wall_clock_time, elapsed_time_nanos, split_time_nanos, note
                     FROM time_records
                     """.trimIndent()
                 )
-                database.execSQL("DROP TABLE time_records")
-                database.execSQL("ALTER TABLE time_records_new RENAME TO time_records")
-                database.execSQL("CREATE INDEX index_time_records_session_id ON time_records(session_id)")
+                db.execSQL("DROP TABLE time_records")
+                db.execSQL("ALTER TABLE time_records_new RENAME TO time_records")
+                db.execSQL("CREATE INDEX index_time_records_session_id ON time_records(session_id)")
             }
         }
 

@@ -1,9 +1,9 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
 }
 
 // 读取签名配置（支持本地和 CI 双模式）
@@ -26,7 +26,7 @@ val hasCiSigning = !ciKeyAlias.isNullOrEmpty()
 android {
     namespace = "io.github.chy5301.chronomark"
     compileSdk {
-        version = release(36)
+        version = release(37)
     }
 
     defaultConfig {
@@ -37,11 +37,6 @@ android {
         versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        // Room schema 导出配置
-        ksp {
-            arg("room.schemaLocation", "$projectDir/schemas")
-        }
     }
 
     // 签名配置
@@ -69,6 +64,8 @@ android {
         release {
             // 启用 R8 代码混淆
             isMinifyEnabled = true
+            // 移除未被引用的资源（需配合 R8）
+            isShrinkResources = true
             // 如果存在签名配置则使用（本地或 CI）
             if (hasLocalKeystore || hasCiSigning) {
                 signingConfig = signingConfigs.getByName("release")
@@ -83,15 +80,17 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     buildFeatures {
         compose = true
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
+}
+
+// Room schema 导出目录（新增数据库版本时需提交生成的 JSON）
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
 dependencies {
