@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import io.github.chy5301.chronomark.data.model.TimeRecord
 
 /**
  * 时间记录实体类
@@ -46,4 +47,27 @@ data class TimeRecordEntity(
     val splitTimeNanos: Long,              // 时间差（纳秒）
 
     val note: String                       // 备注
+)
+
+/**
+ * 转换为领域模型（丢弃数据库专用的 sessionId）
+ */
+fun TimeRecordEntity.toTimeRecord(): TimeRecord = TimeRecord(
+    id = id,
+    wallClockTime = wallClockTime,
+    elapsedTimeNanos = elapsedTimeNanos,
+    splitTimeNanos = splitTimeNanos,
+    note = note
+)
+
+/**
+ * 转换为数据库实体，归属到指定会话
+ */
+fun TimeRecord.toEntity(sessionId: String): TimeRecordEntity = TimeRecordEntity(
+    id = id,
+    sessionId = sessionId,
+    wallClockTime = wallClockTime,
+    elapsedTimeNanos = elapsedTimeNanos,
+    splitTimeNanos = splitTimeNanos,
+    note = note
 )

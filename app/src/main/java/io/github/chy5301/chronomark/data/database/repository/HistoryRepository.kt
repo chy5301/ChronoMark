@@ -4,6 +4,8 @@ import android.util.Log
 import io.github.chy5301.chronomark.data.database.dao.HistoryDao
 import io.github.chy5301.chronomark.data.database.entity.HistorySessionEntity
 import io.github.chy5301.chronomark.data.database.entity.TimeRecordEntity
+import io.github.chy5301.chronomark.data.database.entity.toEntity
+import io.github.chy5301.chronomark.data.database.entity.toTimeRecord
 import io.github.chy5301.chronomark.data.model.SessionType
 import io.github.chy5301.chronomark.data.model.TimeRecord
 import kotlinx.coroutines.flow.Flow
@@ -58,16 +60,7 @@ class HistoryRepository(
                 createdAt = System.currentTimeMillis()
             )
 
-            val recordEntities = records.map { record ->
-                TimeRecordEntity(
-                    id = record.id,
-                    sessionId = session.id,
-                    wallClockTime = record.wallClockTime,
-                    elapsedTimeNanos = record.elapsedTimeNanos,
-                    splitTimeNanos = record.splitTimeNanos,
-                    note = record.note
-                )
-            }
+            val recordEntities = records.map { it.toEntity(session.id) }
 
             historyDao.archiveSession(session, recordEntities)
             Log.i(TAG, "Archived ${records.size} event records for $date")
@@ -111,16 +104,7 @@ class HistoryRepository(
                 totalElapsedNanos = totalElapsedNanos
             )
 
-            val recordEntities = records.map { record ->
-                TimeRecordEntity(
-                    id = record.id,
-                    sessionId = session.id,
-                    wallClockTime = record.wallClockTime,
-                    elapsedTimeNanos = record.elapsedTimeNanos,
-                    splitTimeNanos = record.splitTimeNanos,
-                    note = record.note
-                )
-            }
+            val recordEntities = records.map { it.toEntity(session.id) }
 
             historyDao.archiveSession(session, recordEntities)
             Log.i(TAG, "Archived stopwatch session \"$title\" with ${records.size} records")
@@ -140,17 +124,9 @@ class HistoryRepository(
      * @return 按时间升序的记录列表 Flow（领域模型）
      */
     fun observeEventRecordsByDate(date: String): Flow<List<TimeRecord>> {
-        return historyDao.observeEventRecordsByDate(date).map { entities ->
-            entities.map { entity ->
-                TimeRecord(
-                    id = entity.id,
-                    wallClockTime = entity.wallClockTime,
-                    elapsedTimeNanos = entity.elapsedTimeNanos,
-                    splitTimeNanos = entity.splitTimeNanos,
-                    note = entity.note
-                )
-            }
-        }.emptyOnError("event records of $date")
+        return historyDao.observeEventRecordsByDate(date)
+            .map { entities -> entities.map { it.toTimeRecord() } }
+            .emptyOnError("event records of $date")
     }
 
     /**
@@ -161,15 +137,7 @@ class HistoryRepository(
      */
     suspend fun getEventRecordsByDate(date: String): List<TimeRecord> {
         return try {
-            historyDao.getEventRecordsByDate(date).map { entity ->
-                TimeRecord(
-                    id = entity.id,
-                    wallClockTime = entity.wallClockTime,
-                    elapsedTimeNanos = entity.elapsedTimeNanos,
-                    splitTimeNanos = entity.splitTimeNanos,
-                    note = entity.note
-                )
-            }
+            historyDao.getEventRecordsByDate(date).map { it.toTimeRecord() }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get event records by date", e)
             emptyList()
@@ -201,14 +169,7 @@ class HistoryRepository(
             }
 
             // 插入记录
-            val entity = TimeRecordEntity(
-                id = record.id,
-                sessionId = session.id,
-                wallClockTime = record.wallClockTime,
-                elapsedTimeNanos = record.elapsedTimeNanos,
-                splitTimeNanos = record.splitTimeNanos,
-                note = record.note
-            )
+            val entity = record.toEntity(session.id)
             historyDao.insertRecord(entity)
             Log.d(TAG, "Inserted event record: ${record.id}")
             Result.success(Unit)
@@ -246,16 +207,7 @@ class HistoryRepository(
             }
 
             // 批量插入记录
-            val entities = records.map { record ->
-                TimeRecordEntity(
-                    id = record.id,
-                    sessionId = session.id,
-                    wallClockTime = record.wallClockTime,
-                    elapsedTimeNanos = record.elapsedTimeNanos,
-                    splitTimeNanos = record.splitTimeNanos,
-                    note = record.note
-                )
-            }
+            val entities = records.map { it.toEntity(session.id) }
             historyDao.insertRecords(entities)
             Log.i(TAG, "Migrated ${records.size} event records for $date")
             Result.success(Unit)
