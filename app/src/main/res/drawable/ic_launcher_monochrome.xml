@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  自适应图标的单色层（Android 13+ 主题图标）。
+  复用纯黑版图标，缩放与位置与 ic_launcher_foreground 一致：
+  前景在 1773 画布上缩放 0.63 并平移 328.005，即四周各留 (1 - 0.63) / 2 = 18.5%。
+-->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/app_icon_black_vector_auto_mirroring"
+    android:inset="18.5%" />
