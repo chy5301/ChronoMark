@@ -17,6 +17,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -79,7 +80,7 @@ fun WorkspaceScreen(
     val vibrationEnabled by dataStoreManager.vibrationEnabledFlow.collectAsState(initial = true)
 
     // 双击返回退出逻辑
-    var lastBackPressTime by remember { mutableStateOf(0L) }
+    var lastBackPressTime by remember { mutableLongStateOf(0L) }
 
     BackHandler {
         val currentTime = System.currentTimeMillis()
