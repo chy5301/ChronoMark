@@ -8,14 +8,14 @@ object VersionUtils {
 
     /**
      * 解析版本号为整数数组
-     * 支持 v 前缀和预发布后缀
+     * 支持 v 前缀、预发布后缀与构建元数据（均不计入结果）
      *
      * @param version 版本号字符串（如 "v1.0.2"、"1.0.2"、"v1.0.3-beta"）
      * @return 版本号整数列表，如 [1, 0, 2]
      */
     fun parseVersion(version: String): List<Int> {
-        // 移除 v/V 前缀
-        val cleanVersion = version.trimStart('v', 'V')
+        // 移除 v/V 前缀与构建元数据（+ 之后的部分，如 +build.5）
+        val cleanVersion = version.trimStart('v', 'V').substringBefore('+')
 
         // 移除预发布后缀（-alpha, -beta, -rc 等）
         val mainVersion = cleanVersion.split('-').first()

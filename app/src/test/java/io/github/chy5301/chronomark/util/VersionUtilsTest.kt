@@ -200,6 +200,17 @@ class VersionUtilsTest {
     }
 
     @Test
+    fun `parseVersion - build metadata - ignored`() {
+        assertEquals(listOf(1, 2, 0), VersionUtils.parseVersion("v1.2.0+build.5"))
+        assertEquals(listOf(1, 2, 0), VersionUtils.parseVersion("1.2.0-rc.1+sha.abc"))
+    }
+
+    @Test
+    fun `isNewerVersion - same version with build metadata - not an update`() {
+        assertFalse(VersionUtils.isNewerVersion("1.2.0", "v1.2.0+build.5"))
+    }
+
+    @Test
     fun `isNewerVersion - stable user is not offered prereleases`() {
         assertFalse(VersionUtils.isNewerVersion("1.1.0", "1.2.0-rc"))
     }
