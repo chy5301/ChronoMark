@@ -10,12 +10,13 @@ import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
  */
 class StopwatchViewModelFactory(
     private val dataStoreManager: DataStoreManager,
-    private val historyRepository: HistoryRepository
+    private val historyRepository: HistoryRepository,
+    private val bootCount: () -> Int
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(StopwatchViewModel::class.java)) {
-            return StopwatchViewModel(dataStoreManager, historyRepository) as T
+            return StopwatchViewModel(dataStoreManager, historyRepository, bootCount = bootCount) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

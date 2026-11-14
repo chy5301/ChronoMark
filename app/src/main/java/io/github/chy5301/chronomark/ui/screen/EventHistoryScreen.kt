@@ -29,6 +29,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import io.github.chy5301.chronomark.data.DataStoreManager
 import io.github.chy5301.chronomark.data.database.AppDatabase
 import io.github.chy5301.chronomark.data.database.entity.TimeRecordEntity
 import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
@@ -73,10 +75,16 @@ fun EventHistoryScreen(
         val database = AppDatabase.getDatabase(context)
         HistoryRepository(database.historyDao())
     }
+    val dataStoreManager = remember { DataStoreManager(context) }
 
     val viewModel: EventHistoryViewModel = viewModel(
-        factory = EventHistoryViewModelFactory(historyRepository)
+        factory = EventHistoryViewModelFactory(historyRepository, dataStoreManager)
     )
+
+    // 每次进入历史页时检查逻辑日期是否已变化（ViewModel 跟随 Activity，可能跨夜存活）
+    LaunchedEffect(Unit) {
+        viewModel.onScreenShown()
+    }
 
     // 收集 UI 状态
     val uiState by viewModel.uiState.collectAsState()

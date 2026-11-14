@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import io.github.chy5301.chronomark.data.model.AppMode
 import io.github.chy5301.chronomark.data.model.StopwatchStatus
+import io.github.chy5301.chronomark.data.model.StopwatchTiming
 import io.github.chy5301.chronomark.data.model.ThemeMode
 import io.github.chy5301.chronomark.data.model.TimeRecord
 import io.github.chy5301.chronomark.data.model.UpdateChannel
@@ -46,8 +47,14 @@ class DataStoreManager(private val context: Context) {
         private val KEY_STOPWATCH_STATUS = stringPreferencesKey("stopwatch_status")
         private val KEY_STOPWATCH_START_TIME = longPreferencesKey("stopwatch_start_time")
         private val KEY_STOPWATCH_PAUSED_TIME = longPreferencesKey("stopwatch_paused_time")
+        // v1.1.0 及之前用它保存已计时长（纳秒），现仅用于读取旧数据
         private val KEY_STOPWATCH_PAUSE_TIMESTAMP = longPreferencesKey("stopwatch_pause_timestamp")
         private val KEY_STOPWATCH_RECORDS = stringPreferencesKey("stopwatch_records")
+        private val KEY_STOPWATCH_ACCUMULATED_NANOS = longPreferencesKey("stopwatch_accumulated_nanos")
+        private val KEY_STOPWATCH_ANCHOR_REALTIME_NANOS = longPreferencesKey("stopwatch_anchor_realtime_nanos")
+        private val KEY_STOPWATCH_ANCHOR_WALL_MILLIS = longPreferencesKey("stopwatch_anchor_wall_millis")
+        private val KEY_STOPWATCH_START_WALL_MILLIS = longPreferencesKey("stopwatch_start_wall_millis")
+        private val KEY_STOPWATCH_ANCHOR_BOOT_COUNT = intPreferencesKey("stopwatch_anchor_boot_count")
 
         // 事件模式数据
         private val KEY_EVENT_RECORDS = stringPreferencesKey("event_records")
@@ -357,10 +364,14 @@ class DataStoreManager(private val context: Context) {
     // ==================== 秒表模式数据 ====================
 
     /**
-     * 保存秒表状态
+     * 在同一个事务中保存秒表的状态、计时基准和记录，保证三者始终一致
      * @return Result.success(Unit) 或 Result.failure(exception)
      */
-    suspend fun saveStopwatchStatus(status: StopwatchStatus): Result<Unit> {
+    suspend fun saveStopwatchSnapshot(
+        status: StopwatchStatus,
+        timing: StopwatchTiming,
+        records: List<TimeRecord>
+    ): Result<Unit> {
         return try {
             context.dataStore.edit { preferences ->
                 preferences[KEY_STOPWATCH_STATUS] = when (status) {
@@ -369,6 +380,14 @@ class DataStoreManager(private val context: Context) {
                     is StopwatchStatus.Paused -> "Paused"
                     is StopwatchStatus.Stopped -> "Stopped"
                 }
+                preferences[KEY_STOPWATCH_ACCUMULATED_NANOS] = timing.accumulatedNanos
+                preferences[KEY_STOPWATCH_ANCHOR_REALTIME_NANOS] = timing.anchorRealtimeNanos
+                preferences[KEY_STOPWATCH_ANCHOR_WALL_MILLIS] = timing.anchorWallMillis
+                preferences[KEY_STOPWATCH_START_WALL_MILLIS] = timing.startWallMillis
+                preferences[KEY_STOPWATCH_ANCHOR_BOOT_COUNT] = timing.anchorBootCount
+                preferences[KEY_STOPWATCH_RECORDS] = json.encodeToString(records)
+                // 旧格式的已计时长已被新字段取代
+                preferences.remove(KEY_STOPWATCH_PAUSE_TIMESTAMP)
             }
             Result.success(Unit)
         } catch (e: Exception) {
@@ -397,24 +416,11 @@ class DataStoreManager(private val context: Context) {
         }
 
     /**
-     * 保存秒表经过的时间（纳秒）
-     * @return Result.success(Unit) 或 Result.failure(exception)
+     * 读取秒表计时基准
+     *
+     * 兼容 v1.1.0 及之前的数据：只有旧的已计时长时，返回不带锚点的基准（hasAnchor = false）
      */
-    suspend fun saveStopwatchElapsedTime(elapsedNanos: Long): Result<Unit> {
-        return try {
-            context.dataStore.edit { preferences ->
-                preferences[KEY_STOPWATCH_PAUSE_TIMESTAMP] = elapsedNanos
-            }
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    /**
-     * 读取秒表经过的时间（纳秒）
-     */
-    val stopwatchElapsedTimeFlow: Flow<Long> = context.dataStore.data
+    val stopwatchTimingFlow: Flow<StopwatchTiming> = context.dataStore.data
         .catch { exception ->
             if (exception is IOException) {
                 emit(androidx.datastore.preferences.core.emptyPreferences())
@@ -423,24 +429,20 @@ class DataStoreManager(private val context: Context) {
             }
         }
         .map { preferences ->
-            preferences[KEY_STOPWATCH_PAUSE_TIMESTAMP] ?: 0L
-        }
-
-    /**
-     * 保存秒表记录列表
-     * @return Result.success(Unit) 或 Result.failure(exception)
-     */
-    suspend fun saveStopwatchRecords(records: List<TimeRecord>): Result<Unit> {
-        return try {
-            context.dataStore.edit { preferences ->
-                val jsonString = json.encodeToString(records)
-                preferences[KEY_STOPWATCH_RECORDS] = jsonString
+            val accumulated = preferences[KEY_STOPWATCH_ACCUMULATED_NANOS]
+            if (accumulated != null) {
+                StopwatchTiming(
+                    accumulatedNanos = accumulated,
+                    anchorRealtimeNanos = preferences[KEY_STOPWATCH_ANCHOR_REALTIME_NANOS] ?: 0L,
+                    anchorWallMillis = preferences[KEY_STOPWATCH_ANCHOR_WALL_MILLIS] ?: 0L,
+                    startWallMillis = preferences[KEY_STOPWATCH_START_WALL_MILLIS] ?: 0L,
+                    anchorBootCount = preferences[KEY_STOPWATCH_ANCHOR_BOOT_COUNT]
+                        ?: StopwatchTiming.UNKNOWN_BOOT_COUNT
+                )
+            } else {
+                StopwatchTiming(accumulatedNanos = preferences[KEY_STOPWATCH_PAUSE_TIMESTAMP] ?: 0L)
             }
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
         }
-    }
 
     /**
      * 读取秒表记录列表
@@ -682,8 +684,13 @@ class DataStoreManager(private val context: Context) {
         return try {
             context.dataStore.edit { preferences ->
                 preferences.remove(KEY_STOPWATCH_STATUS)
-                preferences.remove(KEY_STOPWATCH_PAUSE_TIMESTAMP)  // 当前使用：存储经过的时间
                 preferences.remove(KEY_STOPWATCH_RECORDS)
+                preferences.remove(KEY_STOPWATCH_ACCUMULATED_NANOS)
+                preferences.remove(KEY_STOPWATCH_ANCHOR_REALTIME_NANOS)
+                preferences.remove(KEY_STOPWATCH_ANCHOR_WALL_MILLIS)
+                preferences.remove(KEY_STOPWATCH_START_WALL_MILLIS)
+                preferences.remove(KEY_STOPWATCH_ANCHOR_BOOT_COUNT)
+                preferences.remove(KEY_STOPWATCH_PAUSE_TIMESTAMP)
                 // 清除已废弃的 key（兼容旧版本数据）
                 preferences.remove(KEY_STOPWATCH_START_TIME)
                 preferences.remove(KEY_STOPWATCH_PAUSED_TIME)
@@ -716,22 +723,6 @@ class DataStoreManager(private val context: Context) {
      */
     suspend fun clearEventRecords(): Result<Unit> {
         return clearEventData()
-    }
-
-    /**
-     * 清空秒表记录（归档后使用）
-     * 只清空记录，不清空状态
-     * @return Result.success(Unit) 或 Result.failure(exception)
-     */
-    suspend fun clearStopwatchRecords(): Result<Unit> {
-        return try {
-            context.dataStore.edit { preferences ->
-                preferences.remove(KEY_STOPWATCH_RECORDS)
-            }
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
     }
 
     /**

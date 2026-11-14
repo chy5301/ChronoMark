@@ -175,4 +175,43 @@ class VersionUtilsTest {
         assertTrue(VersionUtils.isNewerVersion("v1.0.0", "v1.0.1"))
         assertFalse(VersionUtils.isNewerVersion("v1.0.1", "v1.0.0"))
     }
+
+    // ========== 预发布版本 ==========
+
+    @Test
+    fun `compareVersions - release is newer than its prerelease`() {
+        assertEquals(1, VersionUtils.compareVersions("v1.2.0-beta", "v1.2.0"))
+        assertEquals(-1, VersionUtils.compareVersions("1.2.0", "1.2.0-rc.1"))
+    }
+
+    @Test
+    fun `compareVersions - prerelease identifiers compared by semver precedence`() {
+        assertEquals(1, VersionUtils.compareVersions("1.2.0-alpha", "1.2.0-beta"))
+        assertEquals(1, VersionUtils.compareVersions("1.2.0-rc.2", "1.2.0-rc.10"))
+        assertEquals(1, VersionUtils.compareVersions("1.2.0-rc", "1.2.0-rc.1"))
+        assertEquals(1, VersionUtils.compareVersions("1.2.0-1", "1.2.0-alpha"))
+        assertEquals(0, VersionUtils.compareVersions("v1.2.0-beta", "1.2.0-beta"))
+    }
+
+    @Test
+    fun `isNewerVersion - prerelease user gets the final release`() {
+        assertTrue(VersionUtils.isNewerVersion("1.2.0-beta", "1.2.0"))
+        assertTrue(VersionUtils.isNewerVersion("1.2.0-beta", "1.2.0-rc"))
+    }
+
+    @Test
+    fun `parseVersion - build metadata - ignored`() {
+        assertEquals(listOf(1, 2, 0), VersionUtils.parseVersion("v1.2.0+build.5"))
+        assertEquals(listOf(1, 2, 0), VersionUtils.parseVersion("1.2.0-rc.1+sha.abc"))
+    }
+
+    @Test
+    fun `isNewerVersion - same version with build metadata - not an update`() {
+        assertFalse(VersionUtils.isNewerVersion("1.2.0", "v1.2.0+build.5"))
+    }
+
+    @Test
+    fun `isNewerVersion - stable user is not offered prereleases`() {
+        assertFalse(VersionUtils.isNewerVersion("1.1.0", "1.2.0-rc"))
+    }
 }

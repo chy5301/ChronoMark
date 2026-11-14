@@ -9,12 +9,15 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
-import io.mockk.slot
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.Dispatchers
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -23,16 +26,15 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.time.LocalDateTime
+import java.time.ZoneId
 
 /**
  * EventViewModel 单元测试
  *
- * 使用 MockK 模拟 DataStoreManager 和 HistoryRepository，
- * 测试事件模式的核心业务逻辑
- *
- * 注意：EventViewModel 的 init 块会启动一个无限循环的协程（startWallClockTicking），
- * 必须在每个测试的 runTest 块内部调用 clearViewModel() 来取消协程，
- * 否则 runTest 会永远等待协程完成。
+ * HistoryRepository 用内存「假数据库」实现：每个日期一个 MutableStateFlow，
+ * 写操作修改它，订阅者随之收到推送，行为与 Room 的 Flow 查询一致。
+ * 墙上时间通过注入的时钟控制，便于测试跨过逻辑日期分界点。
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class EventViewModelTest {
@@ -40,29 +42,65 @@ class EventViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
 
     private lateinit var viewModel: EventViewModel
-    private lateinit var mockDataStoreManager: DataStoreManager
-    private lateinit var mockHistoryRepository: HistoryRepository
+    private lateinit var dataStore: DataStoreManager
+    private lateinit var repository: HistoryRepository
+
+    /** 假数据库：逻辑日期 -> 当天记录（按时间升序） */
+    private val db = mutableMapOf<String, MutableStateFlow<List<TimeRecord>>>()
+    private fun day(date: String) = db.getOrPut(date) { MutableStateFlow(emptyList()) }
+
+    // 默认时间 2025-01-15 10:00（分界点 04:00，逻辑日期即 2025-01-15）
+    private var now = millisOf(2025, 1, 15, 10, 0)
+    private val today = "2025-01-15"
+
+    private fun millisOf(y: Int, mo: Int, d: Int, h: Int, mi: Int, s: Int = 0) =
+        LocalDateTime.of(y, mo, d, h, mi, s).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+    private fun record(id: String, wallClock: Long, note: String = "") =
+        TimeRecord(id = id, wallClockTime = wallClock, elapsedTimeNanos = 0L, splitTimeNanos = 0L, note = note)
 
     @Before
     fun setup() {
-        // 设置 Main dispatcher
         Dispatchers.setMain(testDispatcher)
-
-        // Mock android.util.Log
         mockkStatic(Log::class)
         every { Log.i(any(), any()) } returns 0
         every { Log.d(any(), any()) } returns 0
         every { Log.e(any(), any()) } returns 0
         every { Log.e(any(), any(), any()) } returns 0
 
-        mockDataStoreManager = mockk(relaxed = true)
-        mockHistoryRepository = mockk(relaxed = true)
+        dataStore = mockk(relaxed = true)
+        every { dataStore.eventRecordsFlow } returns flowOf(emptyList())
+        every { dataStore.archiveBoundaryHourFlow } returns flowOf(4)
+        every { dataStore.archiveBoundaryMinuteFlow } returns flowOf(0)
+        coEvery { dataStore.clearEventData() } returns Result.success(Unit)
 
-        // 默认设置：无遗留数据，分界点 04:00
-        coEvery { mockDataStoreManager.eventRecordsFlow } returns flowOf(emptyList())
-        coEvery { mockDataStoreManager.archiveBoundaryHourFlow } returns flowOf(4)
-        coEvery { mockDataStoreManager.archiveBoundaryMinuteFlow } returns flowOf(0)
-        coEvery { mockHistoryRepository.getEventRecordsByDate(any()) } returns emptyList()
+        repository = mockk(relaxed = true)
+        every { repository.observeEventRecordsByDate(any()) } answers { day(firstArg()) }
+        coEvery { repository.getEventRecordsByDate(any()) } answers { day(firstArg()).value }
+        coEvery { repository.insertEventRecord(any(), any()) } answers {
+            val d = day(firstArg())
+            d.value = (d.value + secondArg<TimeRecord>()).sortedBy { it.wallClockTime }
+            Result.success(Unit)
+        }
+        coEvery { repository.insertEventRecords(any(), any()) } answers {
+            val d = day(firstArg())
+            d.value = (d.value + secondArg<List<TimeRecord>>()).sortedBy { it.wallClockTime }
+            Result.success(Unit)
+        }
+        coEvery { repository.updateEventRecordNote(any(), any()) } answers {
+            val id = firstArg<String>()
+            db.values.forEach { d -> d.value = d.value.map { if (it.id == id) it.copy(note = secondArg()) else it } }
+            Result.success(Unit)
+        }
+        coEvery { repository.deleteEventRecord(any()) } answers {
+            val id = firstArg<String>()
+            db.values.forEach { d -> d.value = d.value.filter { it.id != id } }
+            Result.success(Unit)
+        }
+        coEvery { repository.deleteEventRecordsByDate(any()) } answers {
+            day(firstArg()).value = emptyList()
+            Result.success(Unit)
+        }
     }
 
     @After
@@ -71,252 +109,189 @@ class EventViewModelTest {
         unmockkStatic(Log::class)
     }
 
+    private fun TestScope.createViewModel(runInit: Boolean = true) {
+        viewModel = EventViewModel(dataStore, repository) { now }
+        if (runInit) testScheduler.runCurrent()
+    }
+
     /**
-     * 清理 ViewModel，取消无限循环协程
-     * 必须在每个 runTest 块末尾调用！
+     * 包装 runTest：无论断言是否失败，都在 finally 中取消 ViewModel 的全部协程（含无限循环），
+     * 否则 runTest 收尾时会在虚拟时间里无限推进该循环，测试进程永远卡住。
      */
-    private fun clearViewModel() {
-        if (::viewModel.isInitialized) {
-            try {
-                val onClearedMethod = viewModel::class.java.getDeclaredMethod("onCleared")
-                onClearedMethod.isAccessible = true
-                onClearedMethod.invoke(viewModel)
-            } catch (e: Exception) {
-                // 忽略反射错误
-            }
+    private fun vmTest(body: suspend TestScope.() -> Unit) = runTest(testDispatcher) {
+        try {
+            body()
+        } finally {
+            // 取消整个 viewModelScope（而非只调 onCleared），连没有被持有句柄的协程也一并取消
+            if (::viewModel.isInitialized) viewModel.viewModelScope.cancel()
         }
     }
 
-    // ========== 初始化测试 ==========
+    // ========== 加载与迁移 ==========
 
     @Test
-    fun `init - no legacy data - loads today records directly`() = runTest(testDispatcher) {
-        // Arrange
-        coEvery { mockDataStoreManager.eventRecordsFlow } returns flowOf(emptyList())
+    fun `init - shows today's records from database`() = vmTest {
+        day(today).value = listOf(record("r1", now - 60_000))
 
-        // Act
-        viewModel = EventViewModel(mockDataStoreManager, mockHistoryRepository)
-        testScheduler.runCurrent()
+        createViewModel()
 
-        // Assert
-        coVerify(exactly = 0) { mockHistoryRepository.insertEventRecords(any(), any()) }
-        coVerify(exactly = 1) { mockHistoryRepository.getEventRecordsByDate(any()) }
-        assertTrue(viewModel.uiState.value.records.isEmpty())
-
-        // 清理：必须在 runTest 块内调用
-        clearViewModel()
+        assertEquals(listOf("r1"), viewModel.uiState.value.records.map { it.id })
     }
 
     @Test
-    fun `init - with legacy data - migrates and clears datastore`() = runTest(testDispatcher) {
-        // Arrange
-        val legacyRecords = listOf(
-            TimeRecord(id = "legacy-1", wallClockTime = 1705280400000L, elapsedTimeNanos = 0L, splitTimeNanos = 0L),
-            TimeRecord(id = "legacy-2", wallClockTime = 1705280500000L, elapsedTimeNanos = 0L, splitTimeNanos = 100_000_000L)
-        )
-        coEvery { mockDataStoreManager.eventRecordsFlow } returns flowOf(legacyRecords)
-        coEvery { mockDataStoreManager.clearEventData() } returns Result.success(Unit)
-        coEvery { mockHistoryRepository.insertEventRecords(any(), any()) } returns Result.success(Unit)
+    fun `init - with legacy data - migrates and clears datastore`() = vmTest {
+        every { dataStore.eventRecordsFlow } returns flowOf(listOf(record("legacy-1", now - 1000)))
 
-        // Act
-        viewModel = EventViewModel(mockDataStoreManager, mockHistoryRepository)
-        testScheduler.runCurrent()
+        createViewModel()
 
-        // Assert
-        coVerify(atLeast = 1) { mockHistoryRepository.insertEventRecords(any(), any()) }
-        coVerify(exactly = 1) { mockDataStoreManager.clearEventData() }
-
-        clearViewModel()
+        coVerify(exactly = 1) { repository.insertEventRecords(today, any()) }
+        coVerify(exactly = 1) { dataStore.clearEventData() }
+        assertEquals(listOf("legacy-1"), viewModel.uiState.value.records.map { it.id })
     }
 
-    // ========== recordEvent 测试 ==========
+    @Test
+    fun `init - migration fails for one date - keeps legacy data in datastore`() = vmTest {
+        val yesterday = millisOf(2025, 1, 14, 10, 0)
+        every { dataStore.eventRecordsFlow } returns
+            flowOf(listOf(record("old", yesterday), record("new", now - 1000)))
+        coEvery { repository.insertEventRecords("2025-01-14", any()) } returns Result.failure(Exception("disk full"))
+
+        createViewModel()
+
+        coVerify(exactly = 0) { dataStore.clearEventData() }
+    }
+
+    // ========== recordEvent ==========
 
     @Test
-    fun `recordEvent - first record - splitTime is zero`() = runTest(testDispatcher) {
-        // Arrange
-        viewModel = EventViewModel(mockDataStoreManager, mockHistoryRepository)
-        testScheduler.runCurrent()
+    fun `recordEvent - first record - splitTime is zero and persisted to today`() = vmTest {
+        createViewModel()
 
-        // Act
         viewModel.recordEvent()
         testScheduler.runCurrent()
 
-        // Assert
         val records = viewModel.uiState.value.records
         assertEquals(1, records.size)
         assertEquals(0L, records[0].splitTimeNanos)
-
-        clearViewModel()
+        coVerify(exactly = 1) { repository.insertEventRecord(today, any()) }
     }
 
     @Test
-    fun `recordEvent - subsequent record - calculates split time`() = runTest(testDispatcher) {
-        // Arrange
-        val existingRecords = listOf(
-            TimeRecord(
-                id = "existing-1",
-                wallClockTime = System.currentTimeMillis() - 1000,
-                elapsedTimeNanos = 0L,
-                splitTimeNanos = 0L
-            )
-        )
-        coEvery { mockHistoryRepository.getEventRecordsByDate(any()) } returns existingRecords
+    fun `recordEvent - subsequent record - split measured from previous record`() = vmTest {
+        day(today).value = listOf(record("r1", now - 90_000))
+        createViewModel()
 
-        viewModel = EventViewModel(mockDataStoreManager, mockHistoryRepository)
-        testScheduler.runCurrent()
-
-        // Act
         viewModel.recordEvent()
         testScheduler.runCurrent()
 
-        // Assert
         val records = viewModel.uiState.value.records
         assertEquals(2, records.size)
-        assertTrue(records[1].splitTimeNanos >= 900_000_000L)
-
-        clearViewModel()
+        assertEquals(90_000_000_000L, records[1].splitTimeNanos)
     }
 
     @Test
-    fun `recordEvent - updates UI immediately`() = runTest(testDispatcher) {
-        // Arrange
-        viewModel = EventViewModel(mockDataStoreManager, mockHistoryRepository)
-        testScheduler.runCurrent()
+    fun `recordEvent - two quick taps - second split measured from first`() = vmTest {
+        createViewModel()
 
-        val initialSize = viewModel.uiState.value.records.size
-
-        // Act
         viewModel.recordEvent()
-
-        // Assert - UI 应该已经更新（乐观更新）
-        assertEquals(initialSize + 1, viewModel.uiState.value.records.size)
-
-        clearViewModel()
-    }
-
-    @Test
-    fun `recordEvent - persists to Room`() = runTest(testDispatcher) {
-        // Arrange
-        val recordSlot = slot<TimeRecord>()
-        coEvery { mockHistoryRepository.insertEventRecord(any(), capture(recordSlot)) } returns Result.success(Unit)
-
-        viewModel = EventViewModel(mockDataStoreManager, mockHistoryRepository)
-        testScheduler.runCurrent()
-
-        // Act
+        now += 2_000
         viewModel.recordEvent()
         testScheduler.runCurrent()
 
-        // Assert
-        coVerify(exactly = 1) { mockHistoryRepository.insertEventRecord(any(), any()) }
-        assertTrue(recordSlot.isCaptured)
-
-        clearViewModel()
+        val splits = viewModel.uiState.value.records.map { it.splitTimeNanos }
+        assertEquals(listOf(0L, 2_000_000_000L), splits)
     }
 
-    // ========== updateRecordNote 测试 ==========
+    @Test
+    fun `recordEvent - tapped before startup load finishes - record is not lost from screen`() = vmTest {
+        createViewModel(runInit = false)
+
+        viewModel.recordEvent()
+        testScheduler.runCurrent()
+
+        assertEquals(1, viewModel.uiState.value.records.size)
+    }
+
+    // ========== 外部数据变化 ==========
 
     @Test
-    fun `updateRecordNote - updates UI and Room`() = runTest(testDispatcher) {
-        // Arrange
-        val existingRecord = TimeRecord(
-            id = "record-1",
-            wallClockTime = System.currentTimeMillis(),
-            elapsedTimeNanos = 0L,
-            splitTimeNanos = 0L,
-            note = ""
-        )
-        coEvery { mockHistoryRepository.getEventRecordsByDate(any()) } returns listOf(existingRecord)
-        coEvery { mockHistoryRepository.updateEventRecordNote(any(), any()) } returns Result.success(Unit)
+    fun `records deleted elsewhere - disappear from workspace`() = vmTest {
+        day(today).value = listOf(record("r1", now - 60_000))
+        createViewModel()
 
-        viewModel = EventViewModel(mockDataStoreManager, mockHistoryRepository)
+        // 例如在设置页「清空所有历史」或在历史页删除今天的记录
+        day(today).value = emptyList()
         testScheduler.runCurrent()
 
-        // Act
-        viewModel.updateRecordNote("record-1", "updated note")
+        assertTrue(viewModel.uiState.value.records.isEmpty())
+    }
+
+    @Test
+    fun `crossing logical day boundary - shows new day and new record starts fresh`() = vmTest {
+        now = millisOf(2025, 1, 15, 3, 59, 30)
+        day("2025-01-14").value = listOf(record("late-night", now - 60_000))
+        createViewModel()
+        assertEquals(listOf("late-night"), viewModel.uiState.value.records.map { it.id })
+
+        now = millisOf(2025, 1, 15, 4, 0, 30)
+        testScheduler.advanceTimeBy(1_001)
+        testScheduler.runCurrent()
+        assertTrue(viewModel.uiState.value.records.isEmpty())
+
+        viewModel.recordEvent()
+        testScheduler.runCurrent()
+        assertEquals(1, day(today).value.size)
+        assertEquals(0L, day(today).value[0].splitTimeNanos)
+        assertEquals(listOf("late-night"), day("2025-01-14").value.map { it.id })
+    }
+
+    // ========== 编辑、删除、重置、分享 ==========
+
+    @Test
+    fun `updateRecordNote - updates database and screen`() = vmTest {
+        day(today).value = listOf(record("r1", now - 1000))
+        createViewModel()
+
+        viewModel.updateRecordNote("r1", "updated note")
         testScheduler.runCurrent()
 
-        // Assert
         assertEquals("updated note", viewModel.uiState.value.records[0].note)
-        coVerify(exactly = 1) { mockHistoryRepository.updateEventRecordNote("record-1", "updated note") }
-
-        clearViewModel()
+        coVerify(exactly = 1) { repository.updateEventRecordNote("r1", "updated note") }
     }
 
-    // ========== deleteRecord 测试 ==========
-
     @Test
-    fun `deleteRecord - removes record from list`() = runTest(testDispatcher) {
-        // Arrange
-        val records = listOf(
-            TimeRecord(id = "r1", wallClockTime = 1000L, elapsedTimeNanos = 0L, splitTimeNanos = 0L),
-            TimeRecord(id = "r2", wallClockTime = 2000L, elapsedTimeNanos = 0L, splitTimeNanos = 1_000_000_000L),
-            TimeRecord(id = "r3", wallClockTime = 3000L, elapsedTimeNanos = 0L, splitTimeNanos = 1_000_000_000L)
-        )
-        coEvery { mockHistoryRepository.getEventRecordsByDate(any()) } returns records
-        coEvery { mockHistoryRepository.deleteEventRecord(any()) } returns Result.success(Unit)
+    fun `deleteRecord - removes record from database and screen`() = vmTest {
+        day(today).value = listOf(record("r1", now - 3000), record("r2", now - 2000), record("r3", now - 1000))
+        createViewModel()
 
-        viewModel = EventViewModel(mockDataStoreManager, mockHistoryRepository)
-        testScheduler.runCurrent()
-
-        // Act
         viewModel.deleteRecord("r2")
         testScheduler.runCurrent()
 
-        // Assert
-        val remaining = viewModel.uiState.value.records
-        assertEquals(2, remaining.size)
-        assertEquals("r1", remaining[0].id)
-        assertEquals("r3", remaining[1].id)
-        coVerify(exactly = 1) { mockHistoryRepository.deleteEventRecord("r2") }
-
-        clearViewModel()
+        assertEquals(listOf("r1", "r3"), viewModel.uiState.value.records.map { it.id })
+        coVerify(exactly = 1) { repository.deleteEventRecord("r2") }
     }
 
-    // ========== reset 测试 ==========
-
     @Test
-    fun `reset - clears UI and Room`() = runTest(testDispatcher) {
-        // Arrange
-        val records = listOf(
-            TimeRecord(id = "r1", wallClockTime = 1000L, elapsedTimeNanos = 0L, splitTimeNanos = 0L)
-        )
-        coEvery { mockHistoryRepository.getEventRecordsByDate(any()) } returns records
-        coEvery { mockHistoryRepository.deleteEventRecordsByDate(any()) } returns Result.success(Unit)
+    fun `reset - clears today's records only`() = vmTest {
+        day(today).value = listOf(record("r1", now - 1000))
+        day("2025-01-14").value = listOf(record("old", millisOf(2025, 1, 14, 10, 0)))
+        createViewModel()
 
-        viewModel = EventViewModel(mockDataStoreManager, mockHistoryRepository)
-        testScheduler.runCurrent()
-
-        // Act
         viewModel.reset()
         testScheduler.runCurrent()
 
-        // Assert
         assertTrue(viewModel.uiState.value.records.isEmpty())
-        coVerify(exactly = 1) { mockHistoryRepository.deleteEventRecordsByDate(any()) }
-
-        clearViewModel()
+        coVerify(exactly = 1) { repository.deleteEventRecordsByDate(today) }
+        assertEquals(1, day("2025-01-14").value.size)
     }
 
-    // ========== generateShareText 测试 ==========
-
     @Test
-    fun `generateShareText - returns formatted text`() = runTest(testDispatcher) {
-        // Arrange
-        val records = listOf(
-            TimeRecord(id = "r1", wallClockTime = 1705280400000L, elapsedTimeNanos = 0L, splitTimeNanos = 0L, note = "first")
-        )
-        coEvery { mockHistoryRepository.getEventRecordsByDate(any()) } returns records
+    fun `generateShareText - returns formatted text`() = vmTest {
+        day(today).value = listOf(record("r1", now - 1000, note = "first"))
+        createViewModel()
 
-        viewModel = EventViewModel(mockDataStoreManager, mockHistoryRepository)
-        testScheduler.runCurrent()
-
-        // Act
         val shareText = viewModel.generateShareText()
 
-        // Assert
-        assertTrue(shareText.isNotEmpty())
-
-        clearViewModel()
+        assertTrue(shareText.contains("first"))
     }
 }

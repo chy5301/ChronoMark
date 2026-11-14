@@ -7,9 +7,14 @@ import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.SessionType
 import io.github.chy5301.chronomark.data.model.StopwatchHistoryUiState
 import io.github.chy5301.chronomark.util.ShareHelper
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -33,8 +38,9 @@ class StopwatchHistoryViewModel(
     val uiState: StateFlow<StopwatchHistoryUiState> = _uiState.asStateFlow()
 
     init {
-        // 初始化：加载今天的会话列表和有记录的日期
-        loadSessionsForDate(_uiState.value.selectedDate)
+        // 会话与记录均由 UI 状态（选中日期 / 选中会话）驱动订阅，切换时自动取消旧订阅
+        observeSessionsOfSelectedDate()
+        observeRecordsOfSelectedSession()
         loadDatesWithRecords()
     }
 
@@ -42,26 +48,25 @@ class StopwatchHistoryViewModel(
      * 切换到上一天
      */
     fun goToPreviousDay() {
-        val previousDate = _uiState.value.selectedDate.minusDays(1)
-        _uiState.update { it.copy(selectedDate = previousDate, currentSessionIndex = 0) }
-        loadSessionsForDate(previousDate)
+        selectDate(_uiState.value.selectedDate.minusDays(1))
     }
 
     /**
      * 切换到下一天
      */
     fun goToNextDay() {
-        val nextDate = _uiState.value.selectedDate.plusDays(1)
-        _uiState.update { it.copy(selectedDate = nextDate, currentSessionIndex = 0) }
-        loadSessionsForDate(nextDate)
+        selectDate(_uiState.value.selectedDate.plusDays(1))
     }
 
     /**
      * 选择指定日期
      */
     fun selectDate(date: LocalDate) {
-        _uiState.update { it.copy(selectedDate = date, currentSessionIndex = 0) }
-        loadSessionsForDate(date)
+        if (date == _uiState.value.selectedDate) return
+        // 清空旧日期的会话，避免新日期数据到达前仍按旧会话订阅记录
+        _uiState.update {
+            it.copy(selectedDate = date, sessions = emptyList(), currentSessionIndex = 0, isLoading = true)
+        }
     }
 
     /**
@@ -73,7 +78,6 @@ class StopwatchHistoryViewModel(
 
         val newIndex = (_uiState.value.currentSessionIndex - 1 + sessions.size) % sessions.size
         _uiState.update { it.copy(currentSessionIndex = newIndex) }
-        loadRecordsForCurrentSession()
     }
 
     /**
@@ -85,7 +89,6 @@ class StopwatchHistoryViewModel(
 
         val newIndex = (_uiState.value.currentSessionIndex + 1) % sessions.size
         _uiState.update { it.copy(currentSessionIndex = newIndex) }
-        loadRecordsForCurrentSession()
     }
 
     /**
@@ -95,7 +98,6 @@ class StopwatchHistoryViewModel(
         if (index < 0 || index >= _uiState.value.sessions.size) return
 
         _uiState.update { it.copy(currentSessionIndex = index) }
-        loadRecordsForCurrentSession()
     }
 
     /**
@@ -111,8 +113,6 @@ class StopwatchHistoryViewModel(
             historyRepository.deleteSession(currentSession.id)
                 .onSuccess {
                     Log.i(TAG, "Deleted session ${currentSession.id}")
-                    // 重新加载会话列表
-                    loadSessionsForDate(_uiState.value.selectedDate)
                 }
                 .onFailure { e ->
                     Log.e(TAG, "Failed to delete session", e)
@@ -133,8 +133,6 @@ class StopwatchHistoryViewModel(
             historyRepository.updateSessionTitle(currentSession.id, newTitle)
                 .onSuccess {
                     Log.i(TAG, "Updated session title to: $newTitle")
-                    // 重新加载会话列表
-                    loadSessionsForDate(_uiState.value.selectedDate)
                 }
                 .onFailure { e ->
                     Log.e(TAG, "Failed to update session title", e)
@@ -150,8 +148,6 @@ class StopwatchHistoryViewModel(
             historyRepository.deleteRecord(recordId)
                 .onSuccess {
                     Log.i(TAG, "Deleted record $recordId")
-                    // 重新加载记录列表
-                    loadRecordsForCurrentSession()
                 }
                 .onFailure { e ->
                     Log.e(TAG, "Failed to delete record", e)
@@ -167,8 +163,6 @@ class StopwatchHistoryViewModel(
             historyRepository.updateRecordNote(recordId, newNote)
                 .onSuccess {
                     Log.i(TAG, "Updated record note")
-                    // 重新加载记录列表
-                    loadRecordsForCurrentSession()
                 }
                 .onFailure { e ->
                     Log.e(TAG, "Failed to update record note", e)
@@ -197,50 +191,42 @@ class StopwatchHistoryViewModel(
     }
 
     /**
-     * 加载指定日期的会话列表（秒表模式）
+     * 订阅选中日期的会话列表；日期变化时 flatMapLatest 自动取消旧日期的订阅
      */
-    private fun loadSessionsForDate(date: LocalDate) {
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun observeSessionsOfSelectedDate() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-
-            val dateString = date.toString()
-
-            // 使用 Flow 收集会话列表
-            historyRepository.getSessionsByDate(dateString, SessionType.STOPWATCH)
+            _uiState.map { it.selectedDate }
+                .distinctUntilChanged()
+                .flatMapLatest { date ->
+                    historyRepository.getSessionsByDate(date.toString(), SessionType.STOPWATCH)
+                }
                 .collect { sessions ->
-                    _uiState.update {
-                        it.copy(
-                            sessions = sessions,
-                            isLoading = false,
-                            currentSessionIndex = 0
-                        )
-                    }
-
-                    // 如果有会话，加载第一个会话的记录
-                    if (sessions.isNotEmpty()) {
-                        loadRecordsForCurrentSession()
-                    } else {
-                        _uiState.update { it.copy(selectedSessionRecords = emptyList()) }
+                    _uiState.update { state ->
+                        // 按 id 保持原选中的会话；它已被删除时退回到相邻的合法位置
+                        val selectedId = state.sessions.getOrNull(state.currentSessionIndex)?.id
+                        val index = sessions.indexOfFirst { it.id == selectedId }
+                            .takeIf { it >= 0 }
+                            ?: state.currentSessionIndex.coerceIn(0, maxOf(sessions.lastIndex, 0))
+                        state.copy(sessions = sessions, isLoading = false, currentSessionIndex = index)
                     }
                 }
         }
     }
 
     /**
-     * 加载当前会话的记录列表
+     * 订阅选中会话的记录；只在选中的会话 id 变化时重新订阅，
+     * 会话列表因改名、新归档等刷新时不会重复查询
      */
-    private fun loadRecordsForCurrentSession() {
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun observeRecordsOfSelectedSession() {
         viewModelScope.launch {
-            val sessions = _uiState.value.sessions
-            if (sessions.isEmpty()) {
-                _uiState.update { it.copy(selectedSessionRecords = emptyList()) }
-                return@launch
-            }
-
-            val currentSession = sessions[_uiState.value.currentSessionIndex]
-
-            // 使用 Flow 收集记录列表
-            historyRepository.getRecordsBySessionId(currentSession.id)
+            _uiState.map { it.sessions.getOrNull(it.currentSessionIndex)?.id }
+                .distinctUntilChanged()
+                .flatMapLatest { sessionId ->
+                    if (sessionId == null) flowOf(emptyList())
+                    else historyRepository.getRecordsBySessionId(sessionId)
+                }
                 .collect { records ->
                     _uiState.update { it.copy(selectedSessionRecords = records) }
                 }

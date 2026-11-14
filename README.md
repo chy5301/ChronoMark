@@ -55,7 +55,8 @@ ChronoMark 提供**事件**和**秒表**两种独立的记录模式，数据独�
 传统秒表设计，支持高精度计时和完整的计时控制。
 
 **特点**：
-- ⚡ 高精度计时（毫秒级，使用 nanoTime）
+- ⚡ 高精度计时（毫秒级，基于系统单调时钟，锁屏休眠期间照常计时）
+- 💾 计时中关闭应用或被系统回收，重新打开后自动恢复并继续计时
 - 🎮 完整的计时控制（开始/暂停/继续/停止/重置）
 - 📍 运行中瞬间标记时间点
 - 📊 每个标记点记录累计时间、时间差和世界时间时间
@@ -226,7 +227,7 @@ cd ChronoMark
   - Room 数据库：历史记录存储
   - Kotlinx Serialization：数据序列化
 - **代码混淆**：R8 (APK 体积优化)
-- **时间处理**：java.time API (高精度 nanoTime)
+- **时间处理**：java.time API + `SystemClock.elapsedRealtimeNanos()`（高精度单调时钟）
 
 ### 项目结构
 
@@ -241,23 +242,28 @@ app/src/main/java/io/github/chy5301/chronomark/
 │   │   ├── entity/              # 数据库实体
 │   │   └── repository/          # 数据仓库层
 │   ├── network/                 # 网络请求
+│   │   ├── ReleaseApiService.kt # Gitee/GitHub Release API 请求
 │   │   └── UpdateChecker.kt     # 版本更新检查器
 │   └── model/                   # 数据模型
 │       ├── AppMode.kt           # 应用模式枚举
 │       ├── TimeRecord.kt        # 时间记录数据模型
 │       ├── StopwatchStatus.kt   # 秒表状态枚举
+│       ├── StopwatchTiming.kt   # 秒表计时基准（持久化锚点）
 │       ├── RecordCardMode.kt    # 记录卡片模式枚举
 │       ├── SessionType.kt       # 会话类型枚举
 │       └── *UiState.kt          # UI 状态数据类
 ├── ui/
 │   ├── screen/                  # 页面层
-│   │   ├── MainScreen.kt        # 主屏幕
+│   │   ├── MainScreen.kt        # 主屏幕（页面切换）
+│   │   ├── WorkspaceScreen.kt   # 工作区（承载秒表/事件页）
 │   │   ├── StopwatchScreen.kt   # 秒表屏幕
 │   │   ├── EventScreen.kt       # 事件屏幕
-│   │   ├── HistoryScreen.kt     # 历史记录屏幕
+│   │   ├── StopwatchHistoryScreen.kt # 秒表历史记录
+│   │   ├── EventHistoryScreen.kt     # 事件历史记录
 │   │   └── SettingsScreen.kt    # 设置页面
 │   ├── components/              # 共享组件层 (Phase 9)
 │   │   ├── navigation/          # 导航组件
+│   │   ├── history/             # 历史记录组件
 │   │   ├── record/              # 记录卡片组件
 │   │   ├── button/              # 按钮组件
 │   │   └── dialog/              # 对话框组件
@@ -270,7 +276,8 @@ app/src/main/java/io/github/chy5301/chronomark/
 └── viewmodel/                   # ViewModel 层
     ├── StopwatchViewModel.kt    # 秒表业务逻辑
     ├── EventViewModel.kt        # 事件业务逻辑
-    ├── HistoryViewModel.kt      # 历史记录业务逻辑
+    ├── StopwatchHistoryViewModel.kt # 秒表历史记录
+    ├── EventHistoryViewModel.kt     # 事件历史记录
     └── *ViewModelFactory.kt     # ViewModel 工厂
 ```
 

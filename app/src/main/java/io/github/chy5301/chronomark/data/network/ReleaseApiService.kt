@@ -14,7 +14,9 @@ import java.util.concurrent.TimeUnit
  * Release API 请求服务
  * 支持从 Gitee 和 GitHub 获取最新版本信息
  */
-class ReleaseApiService {
+class ReleaseApiService(
+    private val client: OkHttpClient = defaultClient()
+) {
 
     companion object {
         // Gitee API
@@ -27,13 +29,13 @@ class ReleaseApiService {
 
         // 超时设置
         private const val TIMEOUT_SECONDS = 10L
-    }
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .readTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .writeTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .build()
+        private fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
+            .connectTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .readTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .writeTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .build()
+    }
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -53,19 +55,20 @@ class ReleaseApiService {
                 .get()
                 .build()
 
-            val response = client.newCall(request).execute()
+            // use{} 保证任何返回路径都关闭响应，否则连接无法回收
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(
+                        Exception("Gitee API error: ${response.code} ${response.message}")
+                    )
+                }
 
-            if (!response.isSuccessful) {
-                return@withContext Result.failure(
-                    Exception("Gitee API error: ${response.code} ${response.message}")
-                )
+                val body = response.body?.string()
+                    ?: return@withContext Result.failure(Exception("Empty response from Gitee"))
+
+                val releaseInfo = json.decodeFromString<GiteeReleaseInfo>(body)
+                Result.success(UpdateInfo.fromGitee(releaseInfo))
             }
-
-            val body = response.body?.string()
-                ?: return@withContext Result.failure(Exception("Empty response from Gitee"))
-
-            val releaseInfo = json.decodeFromString<GiteeReleaseInfo>(body)
-            Result.success(UpdateInfo.fromGitee(releaseInfo))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -85,19 +88,20 @@ class ReleaseApiService {
                 .get()
                 .build()
 
-            val response = client.newCall(request).execute()
+            // use{} 保证任何返回路径都关闭响应，否则连接无法回收
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(
+                        Exception("GitHub API error: ${response.code} ${response.message}")
+                    )
+                }
 
-            if (!response.isSuccessful) {
-                return@withContext Result.failure(
-                    Exception("GitHub API error: ${response.code} ${response.message}")
-                )
+                val body = response.body?.string()
+                    ?: return@withContext Result.failure(Exception("Empty response from GitHub"))
+
+                val releaseInfo = json.decodeFromString<GitHubReleaseInfo>(body)
+                Result.success(UpdateInfo.fromGitHub(releaseInfo))
             }
-
-            val body = response.body?.string()
-                ?: return@withContext Result.failure(Exception("Empty response from GitHub"))
-
-            val releaseInfo = json.decodeFromString<GitHubReleaseInfo>(body)
-            Result.success(UpdateInfo.fromGitHub(releaseInfo))
         } catch (e: Exception) {
             Result.failure(e)
         }

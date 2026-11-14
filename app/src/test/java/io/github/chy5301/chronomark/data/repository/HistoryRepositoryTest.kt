@@ -16,6 +16,7 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.slot
 import io.mockk.unmockkStatic
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -165,6 +166,42 @@ class HistoryRepositoryTest {
         assertTrue(result.isSuccess)
         coVerify(exactly = 1) { mockDao.insertRecords(any()) }
         assertEquals(3, recordsSlot.captured.size)
+    }
+
+    // ========== observeEventRecordsByDate 测试 ==========
+
+    @Test
+    fun `observeEventRecordsByDate - maps every emission to domain records`() = runTest {
+        val date = "2025-01-15"
+        val entity = TimeRecordEntity(
+            id = "id-1", sessionId = "s", wallClockTime = 1705280400000L,
+            elapsedTimeNanos = 0L, splitTimeNanos = 5L, note = "n"
+        )
+        every { mockDao.observeEventRecordsByDate(date) } returns
+            kotlinx.coroutines.flow.flowOf(listOf(entity), emptyList())
+
+        val emissions = repository.observeEventRecordsByDate(date).toList()
+
+        assertEquals(
+            listOf(listOf(TimeRecord(id = "id-1", wallClockTime = 1705280400000L, elapsedTimeNanos = 0L, splitTimeNanos = 5L, note = "n")), emptyList()),
+            emissions
+        )
+    }
+
+    // ========== 订阅查询的异常处理 ==========
+
+    @Test
+    fun `observed queries - database error - emit empty list instead of throwing`() = runTest {
+        val error = android.database.sqlite.SQLiteException("disk I/O error")
+        every { mockDao.observeEventRecordsByDate(any()) } returns kotlinx.coroutines.flow.flow { throw error }
+        every { mockDao.getSessionsByDate(any(), any()) } returns kotlinx.coroutines.flow.flow { throw error }
+        every { mockDao.getRecordsBySessionId(any()) } returns kotlinx.coroutines.flow.flow { throw error }
+        every { mockDao.getDatesWithRecords(any()) } returns kotlinx.coroutines.flow.flow { throw error }
+
+        assertEquals(listOf(emptyList<TimeRecord>()), repository.observeEventRecordsByDate("2025-01-15").toList())
+        assertEquals(listOf(emptyList<HistorySessionEntity>()), repository.getSessionsByDate("2025-01-15", SessionType.EVENT).toList())
+        assertEquals(listOf(emptyList<TimeRecordEntity>()), repository.getRecordsBySessionId("s").toList())
+        assertEquals(listOf(emptyList<String>()), repository.getDatesWithRecords(SessionType.EVENT).toList())
     }
 
     // ========== getEventRecordsByDate 测试 ==========

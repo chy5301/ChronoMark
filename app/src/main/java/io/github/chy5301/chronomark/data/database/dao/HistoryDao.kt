@@ -68,6 +68,22 @@ interface HistoryDao {
     suspend fun getEventRecordsByDate(date: String): List<TimeRecordEntity>
 
     /**
+     * 订阅指定日期的事件记录，数据库变化时自动推送最新结果（事件页使用）
+     *
+     * @param date 日期字符串（格式：yyyy-MM-dd）
+     * @return 按时间升序的记录实体列表 Flow
+     */
+    @Query(
+        """
+        SELECT r.* FROM time_records r
+        INNER JOIN history_sessions s ON r.session_id = s.id
+        WHERE s.date = :date AND s.session_type = 'EVENT'
+        ORDER BY r.wall_clock_time ASC
+    """
+    )
+    fun observeEventRecordsByDate(date: String): Flow<List<TimeRecordEntity>>
+
+    /**
      * 查询指定会话的所有记录
      *
      * @param sessionId 会话 ID

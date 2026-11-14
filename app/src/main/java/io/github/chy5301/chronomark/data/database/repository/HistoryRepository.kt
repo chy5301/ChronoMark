@@ -4,9 +4,13 @@ import android.util.Log
 import io.github.chy5301.chronomark.data.database.dao.HistoryDao
 import io.github.chy5301.chronomark.data.database.entity.HistorySessionEntity
 import io.github.chy5301.chronomark.data.database.entity.TimeRecordEntity
+import io.github.chy5301.chronomark.data.database.entity.toEntity
+import io.github.chy5301.chronomark.data.database.entity.toTimeRecord
 import io.github.chy5301.chronomark.data.model.SessionType
 import io.github.chy5301.chronomark.data.model.TimeRecord
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
 import java.time.LocalDate
 import java.util.UUID
 
@@ -22,6 +26,15 @@ class HistoryRepository(
 
     companion object {
         private const val TAG = "HistoryRepository"
+    }
+
+    /**
+     * 订阅查询出错（如磁盘已满、I/O 错误）时记录日志并推送空列表，避免异常传到 ViewModel 导致崩溃，
+     * 与一次性查询出错返回空列表的处理保持一致
+     */
+    private fun <T> Flow<List<T>>.emptyOnError(what: String): Flow<List<T>> = catch { e ->
+        Log.e(TAG, "Failed to observe $what", e)
+        emit(emptyList())
     }
 
     // ========== 归档操作 ==========
@@ -47,16 +60,7 @@ class HistoryRepository(
                 createdAt = System.currentTimeMillis()
             )
 
-            val recordEntities = records.map { record ->
-                TimeRecordEntity(
-                    id = record.id,
-                    sessionId = session.id,
-                    wallClockTime = record.wallClockTime,
-                    elapsedTimeNanos = record.elapsedTimeNanos,
-                    splitTimeNanos = record.splitTimeNanos,
-                    note = record.note
-                )
-            }
+            val recordEntities = records.map { it.toEntity(session.id) }
 
             historyDao.archiveSession(session, recordEntities)
             Log.i(TAG, "Archived ${records.size} event records for $date")
@@ -100,16 +104,7 @@ class HistoryRepository(
                 totalElapsedNanos = totalElapsedNanos
             )
 
-            val recordEntities = records.map { record ->
-                TimeRecordEntity(
-                    id = record.id,
-                    sessionId = session.id,
-                    wallClockTime = record.wallClockTime,
-                    elapsedTimeNanos = record.elapsedTimeNanos,
-                    splitTimeNanos = record.splitTimeNanos,
-                    note = record.note
-                )
-            }
+            val recordEntities = records.map { it.toEntity(session.id) }
 
             historyDao.archiveSession(session, recordEntities)
             Log.i(TAG, "Archived stopwatch session \"$title\" with ${records.size} records")
@@ -123,6 +118,18 @@ class HistoryRepository(
     // ========== 实时同步操作（事件模式）==========
 
     /**
+     * 订阅指定日期的事件记录，数据库变化（新增、删除、改备注、清空历史）时自动推送
+     *
+     * @param date 日期字符串（格式：yyyy-MM-dd）
+     * @return 按时间升序的记录列表 Flow（领域模型）
+     */
+    fun observeEventRecordsByDate(date: String): Flow<List<TimeRecord>> {
+        return historyDao.observeEventRecordsByDate(date)
+            .map { entities -> entities.map { it.toTimeRecord() } }
+            .emptyOnError("event records of $date")
+    }
+
+    /**
      * 按日期查询事件记录（用于加载今天的记录）
      *
      * @param date 日期字符串（格式：yyyy-MM-dd）
@@ -130,15 +137,7 @@ class HistoryRepository(
      */
     suspend fun getEventRecordsByDate(date: String): List<TimeRecord> {
         return try {
-            historyDao.getEventRecordsByDate(date).map { entity ->
-                TimeRecord(
-                    id = entity.id,
-                    wallClockTime = entity.wallClockTime,
-                    elapsedTimeNanos = entity.elapsedTimeNanos,
-                    splitTimeNanos = entity.splitTimeNanos,
-                    note = entity.note
-                )
-            }
+            historyDao.getEventRecordsByDate(date).map { it.toTimeRecord() }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get event records by date", e)
             emptyList()
@@ -170,14 +169,7 @@ class HistoryRepository(
             }
 
             // 插入记录
-            val entity = TimeRecordEntity(
-                id = record.id,
-                sessionId = session.id,
-                wallClockTime = record.wallClockTime,
-                elapsedTimeNanos = record.elapsedTimeNanos,
-                splitTimeNanos = record.splitTimeNanos,
-                note = record.note
-            )
+            val entity = record.toEntity(session.id)
             historyDao.insertRecord(entity)
             Log.d(TAG, "Inserted event record: ${record.id}")
             Result.success(Unit)
@@ -215,16 +207,7 @@ class HistoryRepository(
             }
 
             // 批量插入记录
-            val entities = records.map { record ->
-                TimeRecordEntity(
-                    id = record.id,
-                    sessionId = session.id,
-                    wallClockTime = record.wallClockTime,
-                    elapsedTimeNanos = record.elapsedTimeNanos,
-                    splitTimeNanos = record.splitTimeNanos,
-                    note = record.note
-                )
-            }
+            val entities = records.map { it.toEntity(session.id) }
             historyDao.insertRecords(entities)
             Log.i(TAG, "Migrated ${records.size} event records for $date")
             Result.success(Unit)
@@ -286,7 +269,7 @@ class HistoryRepository(
         date: String,
         sessionType: SessionType
     ): Flow<List<HistorySessionEntity>> {
-        return historyDao.getSessionsByDate(date, sessionType)
+        return historyDao.getSessionsByDate(date, sessionType).emptyOnError("sessions of $date")
     }
 
     /**
@@ -296,7 +279,7 @@ class HistoryRepository(
      * @return Flow 包装的记录列表
      */
     fun getRecordsBySessionId(sessionId: String): Flow<List<TimeRecordEntity>> {
-        return historyDao.getRecordsBySessionId(sessionId)
+        return historyDao.getRecordsBySessionId(sessionId).emptyOnError("records of session $sessionId")
     }
 
     /**
@@ -306,7 +289,7 @@ class HistoryRepository(
      * @return Flow 包装的日期字符串列表
      */
     fun getDatesWithRecords(sessionType: SessionType): Flow<List<String>> {
-        return historyDao.getDatesWithRecords(sessionType)
+        return historyDao.getDatesWithRecords(sessionType).emptyOnError("dates with records")
     }
 
     // ========== 更新操作 ==========

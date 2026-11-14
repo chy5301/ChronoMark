@@ -1,11 +1,13 @@
 package io.github.chy5301.chronomark.viewmodel
 
+import android.os.SystemClock
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.chy5301.chronomark.data.DataStoreManager
 import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.StopwatchStatus
+import io.github.chy5301.chronomark.data.model.StopwatchTiming
 import io.github.chy5301.chronomark.data.model.StopwatchUiState
 import io.github.chy5301.chronomark.data.model.TimeRecord
 import io.github.chy5301.chronomark.util.ShareHelper
@@ -25,11 +27,17 @@ import kotlinx.coroutines.launch
  */
 class StopwatchViewModel(
     private val dataStoreManager: DataStoreManager,
-    private val historyRepository: HistoryRepository
+    private val historyRepository: HistoryRepository,
+    private val realtimeNanos: () -> Long = SystemClock::elapsedRealtimeNanos,
+    private val wallClockMillis: () -> Long = System::currentTimeMillis,
+    private val bootCount: () -> Int = { StopwatchTiming.UNKNOWN_BOOT_COUNT }
 ) : ViewModel() {
 
     companion object {
         private const val TAG = "StopwatchViewModel"
+
+        /** 合理的最长计时（1 年），超过视为数据或时钟异常 */
+        private const val MAX_REASONABLE_NANOS = 365L * 24 * 60 * 60 * 1_000_000_000L
     }
 
     // UI 状态
@@ -42,10 +50,8 @@ class StopwatchViewModel(
     // 墙上时钟协程（独立运行，不受秒表状态影响）
     private var wallClockJob: Job? = null
 
-    // 计时相关变量
-    private var startTimeNanos: Long = 0L
-    private var pausedTimeNanos: Long = 0L
-    private var totalPausedTimeNanos: Long = 0L
+    // 计时基准：运行中已计时长 = accumulatedNanos + (realtimeNanos() - anchorRealtimeNanos)
+    private var timing = StopwatchTiming()
 
     init {
         // 启动墙上时钟更新（始终运行）
@@ -60,8 +66,14 @@ class StopwatchViewModel(
     fun start() {
         if (_uiState.value.status != StopwatchStatus.Idle) return
 
-        startTimeNanos = System.nanoTime()
-        totalPausedTimeNanos = 0L
+        val nowWall = wallClockMillis()
+        timing = StopwatchTiming(
+            accumulatedNanos = 0L,
+            anchorRealtimeNanos = realtimeNanos(),
+            anchorWallMillis = nowWall,
+            startWallMillis = nowWall,
+            anchorBootCount = bootCount()
+        )
         _uiState.update { it.copy(status = StopwatchStatus.Running) }
         startTimerTicking()
         saveCurrentState()
@@ -73,9 +85,10 @@ class StopwatchViewModel(
     fun pause() {
         if (_uiState.value.status != StopwatchStatus.Running) return
 
-        pausedTimeNanos = System.nanoTime()
+        timing = timing.copy(accumulatedNanos = getCurrentElapsedTime())
         _uiState.update { it.copy(status = StopwatchStatus.Paused) }
         stopTimerTicking()
+        updateCurrentTime()
         saveCurrentState()
     }
 
@@ -85,8 +98,11 @@ class StopwatchViewModel(
     fun resume() {
         if (_uiState.value.status != StopwatchStatus.Paused) return
 
-        val pauseDuration = System.nanoTime() - pausedTimeNanos
-        totalPausedTimeNanos += pauseDuration
+        timing = timing.copy(
+            anchorRealtimeNanos = realtimeNanos(),
+            anchorWallMillis = wallClockMillis(),
+            anchorBootCount = bootCount()
+        )
         _uiState.update { it.copy(status = StopwatchStatus.Running) }
         startTimerTicking()
         saveCurrentState()
@@ -108,14 +124,12 @@ class StopwatchViewModel(
      */
     fun reset() {
         stopTimerTicking()
-        startTimeNanos = 0L
-        pausedTimeNanos = 0L
-        totalPausedTimeNanos = 0L
+        timing = StopwatchTiming()
         _uiState.update {
             StopwatchUiState(
                 status = StopwatchStatus.Idle,
                 currentTime = "00:00.000",
-                wallClockTime = TimeFormatter.formatWallClockWithDate(System.currentTimeMillis()),
+                wallClockTime = TimeFormatter.formatWallClockWithDate(wallClockMillis()),
                 currentTimeNanos = 0L,
                 records = emptyList()
             )
@@ -137,7 +151,7 @@ class StopwatchViewModel(
         if (_uiState.value.status != StopwatchStatus.Running) return
 
         val currentNanos = getCurrentElapsedTime()
-        val currentWallClockTime = System.currentTimeMillis()
+        val currentWallClockTime = wallClockMillis()
         val lastNanos = _uiState.value.records.firstOrNull()?.elapsedTimeNanos ?: 0L
         // 确保时间差非负，防止数据损坏或异常导致的负数
         val splitNanos = (currentNanos - lastNanos).coerceAtLeast(0L)
@@ -180,18 +194,20 @@ class StopwatchViewModel(
     }
 
     /**
-     * 获取当前经过的时间（纳秒）
-     * 确保返回值非负，防止系统时间异常导致的负数
+     * 获取当前经过的时间（纳秒），直接由计时基准算出，不依赖界面刷新
      */
     private fun getCurrentElapsedTime(): Long {
-        val elapsed = System.nanoTime() - startTimeNanos - totalPausedTimeNanos
-        return elapsed.coerceAtLeast(0L)
+        if (_uiState.value.status != StopwatchStatus.Running) return timing.accumulatedNanos
+        val sinceAnchor = (realtimeNanos() - timing.anchorRealtimeNanos).coerceAtLeast(0L)
+        return timing.accumulatedNanos + sinceAnchor
     }
 
     /**
      * 启动计时器刻度
      */
     private fun startTimerTicking() {
+        // 先取消旧循环：例如冷启动时用户在恢复完成前点了「开始」，恢复逻辑会再次启动循环
+        timerJob?.cancel()
         timerJob = viewModelScope.launch {
             while (isActive) {
                 delay(10) // 每 10ms 更新一次
@@ -238,7 +254,7 @@ class StopwatchViewModel(
      * 更新墙上时钟显示
      */
     private fun updateWallClock() {
-        val currentWallClockTime = System.currentTimeMillis()
+        val currentWallClockTime = wallClockMillis()
         _uiState.update {
             it.copy(wallClockTime = TimeFormatter.formatWallClockWithDate(currentWallClockTime))
         }
@@ -251,51 +267,49 @@ class StopwatchViewModel(
         viewModelScope.launch {
             // 加载状态
             val savedStatus = dataStoreManager.stopwatchStatusFlow.first()
-            val savedElapsedNanos = dataStoreManager.stopwatchElapsedTimeFlow.first()
+            val savedTiming = dataStoreManager.stopwatchTimingFlow.first()
             val savedRecords = dataStoreManager.stopwatchRecordsFlow.first()
 
-            // 处理不同状态的恢复
-            when (savedStatus) {
-                is StopwatchStatus.Idle -> {
-                    // 保持默认状态
+            if (savedStatus is StopwatchStatus.Idle) return@launch
+
+            // 数据验证：已计时长为负或超过 1 年视为数据损坏，清除并重置
+            if (savedTiming.accumulatedNanos !in 0..MAX_REASONABLE_NANOS) {
+                reset()
+                return@launch
+            }
+
+            val nowRealtime = realtimeNanos()
+            val nowWall = wallClockMillis()
+            val nowBootCount = bootCount()
+            val restoredElapsed = if (savedStatus is StopwatchStatus.Running && savedTiming.hasAnchor) {
+                savedTiming.accumulatedNanos +
+                    savedTiming.elapsedSinceAnchorNanos(nowRealtime, nowWall, nowBootCount)
+            } else {
+                null
+            }
+
+            if (restoredElapsed != null && restoredElapsed <= MAX_REASONABLE_NANOS) {
+                // 进程在计时中被杀死：补上停止运行期间经过的时间，并以当前时刻为新锚点继续计时
+                timing = savedTiming.copy(
+                    accumulatedNanos = restoredElapsed,
+                    anchorRealtimeNanos = nowRealtime,
+                    anchorWallMillis = nowWall,
+                    anchorBootCount = nowBootCount
+                )
+                _uiState.update { it.copy(status = StopwatchStatus.Running, records = savedRecords) }
+                updateCurrentTime()
+                startTimerTicking()
+                saveCurrentState()
+            } else {
+                // 无法可靠得知中断期间的时长（旧版数据没有锚点，或补算结果超过 1 年，多为时钟曾经错误），
+                // 保留已保存的时长，运行中的状态降级为暂停
+                if (restoredElapsed != null) {
+                    Log.w(TAG, "Implausible restored elapsed time ($restoredElapsed ns), restoring as paused")
                 }
-
-                is StopwatchStatus.Running, is StopwatchStatus.Paused, is StopwatchStatus.Stopped -> {
-                    // 数据验证：检测异常数据（负数或过大的值）
-                    // 如果数据异常，直接清除并重置为初始状态
-                    val maxReasonableNanos = 365L * 24 * 60 * 60 * 1_000_000_000L // 1 年
-                    if (savedElapsedNanos !in 0..maxReasonableNanos) {
-                        // 数据异常，清除并重置
-                        reset()
-                        return@launch
-                    }
-
-                    // 重新初始化时间基准
-                    // getCurrentElapsedTime() = System.nanoTime() - startTimeNanos - totalPausedTimeNanos
-                    // 我们希望恢复后 getCurrentElapsedTime() = savedElapsedNanos
-                    // 所以: savedElapsedNanos = System.nanoTime() - startTimeNanos - totalPausedTimeNanos
-                    // 设 totalPausedTimeNanos = 0，则: startTimeNanos = System.nanoTime() - savedElapsedNanos
-                    val now = System.nanoTime()
-                    startTimeNanos = now - savedElapsedNanos
-                    totalPausedTimeNanos = 0L
-                    pausedTimeNanos = now
-
-                    // Running 状态需要特殊处理：
-                    // 如果应用被杀死或重启，Running 状态会变为 Paused
-                    val newStatus = if (savedStatus is StopwatchStatus.Running) {
-                        StopwatchStatus.Paused
-                    } else {
-                        savedStatus
-                    }
-
-                    _uiState.update {
-                        it.copy(
-                            status = newStatus,
-                            records = savedRecords
-                        )
-                    }
-                    updateCurrentTime()
-                }
+                timing = savedTiming
+                val newStatus = if (savedStatus is StopwatchStatus.Running) StopwatchStatus.Paused else savedStatus
+                _uiState.update { it.copy(status = newStatus, records = savedRecords) }
+                updateCurrentTime()
             }
         }
     }
@@ -307,32 +321,23 @@ class StopwatchViewModel(
         val currentState = _uiState.value
         return ShareHelper.generateStopwatchShareText(
             records = currentState.records,
-            totalElapsedNanos = currentState.currentTimeNanos
+            totalElapsedNanos = getCurrentElapsedTime()
         )
     }
 
     /**
      * 保存当前状态
+     *
+     * 计时基准足以还原运行中的时长，因此只需在状态变化时保存，计时过程中无需定时写入。
+     * 在调用时同步取快照，避免协程延后执行时读到之后的状态。
      */
     private fun saveCurrentState() {
+        val status = _uiState.value.status
+        val records = _uiState.value.records
+        val timingSnapshot = timing
         viewModelScope.launch {
-            val currentState = _uiState.value
-
-            // 保存状态
-            dataStoreManager.saveStopwatchStatus(currentState.status)
-                .onFailure { e -> e.printStackTrace() }
-
-            // 保存记录
-            dataStoreManager.saveStopwatchRecords(currentState.records)
-                .onFailure { e -> e.printStackTrace() }
-
-            // 保存经过的时间（纳秒）
-            val elapsedNanos = when (currentState.status) {
-                is StopwatchStatus.Idle -> 0L
-                else -> currentState.currentTimeNanos
-            }
-            dataStoreManager.saveStopwatchElapsedTime(elapsedNanos)
-                .onFailure { e -> e.printStackTrace() }
+            dataStoreManager.saveStopwatchSnapshot(status, timingSnapshot, records)
+                .onFailure { e -> Log.e(TAG, "Failed to save stopwatch state", e) }
         }
     }
 
@@ -370,15 +375,12 @@ class StopwatchViewModel(
             historyRepository.archiveStopwatchRecords(
                 records = records,
                 title = title,
-                startTime = records.first().wallClockTime,
-                totalElapsedNanos = _uiState.value.currentTimeNanos
+                // 记录按新→旧排列；旧版数据没有会话开始时间时，退而取最早一条标记的时间
+                startTime = timing.startWallMillis.takeIf { it > 0L } ?: records.last().wallClockTime,
+                totalElapsedNanos = getCurrentElapsedTime()
             )
                 .onSuccess {
                     Log.i(TAG, "Saved to history successfully")
-
-                    // 清空 DataStore 工作区
-                    dataStoreManager.clearStopwatchRecords()
-                        .onFailure { e -> Log.e(TAG, "Failed to clear records", e) }
 
                     // 重置状态
                     reset()
@@ -391,8 +393,7 @@ class StopwatchViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        // 保存状态
-        saveCurrentState()
+        // 此时 viewModelScope 已被取消，无法再保存；各操作发生时已即时保存，运行中的时长可由计时基准还原
         stopTimerTicking()
         wallClockJob?.cancel()
         wallClockJob = null

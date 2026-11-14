@@ -3,13 +3,21 @@ package io.github.chy5301.chronomark.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.chy5301.chronomark.data.DataStoreManager
 import io.github.chy5301.chronomark.data.database.repository.HistoryRepository
 import io.github.chy5301.chronomark.data.model.EventHistoryUiState
 import io.github.chy5301.chronomark.data.model.SessionType
+import io.github.chy5301.chronomark.util.ArchiveUtils
 import io.github.chy5301.chronomark.util.ShareHelper
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -21,7 +29,9 @@ import java.time.LocalDate
  * 事件模式特点：一天一个会话（自动归档），无需会话选择器。
  */
 class EventHistoryViewModel(
-    private val historyRepository: HistoryRepository
+    private val historyRepository: HistoryRepository,
+    private val dataStoreManager: DataStoreManager,
+    private val wallClockMillis: () -> Long = System::currentTimeMillis
 ) : ViewModel() {
 
     companion object {
@@ -32,36 +42,72 @@ class EventHistoryViewModel(
     private val _uiState = MutableStateFlow(EventHistoryUiState())
     val uiState: StateFlow<EventHistoryUiState> = _uiState.asStateFlow()
 
+    // 上一次自动定位到的「逻辑今天」，用于判断是否已跨过逻辑日期
+    private var lastLogicalToday: LocalDate? = null
+
     init {
-        // 初始化：加载今天的会话列表和有记录的日期
-        loadSessionsForDate(_uiState.value.selectedDate)
+        // 初始化：定位到逻辑上的今天（与事件页一致）后开始订阅会话；记录随选中会话自动订阅
+        jumpToLogicalTodayIfChanged()
+        observeRecordsOfSelectedSession()
         loadDatesWithRecords()
+    }
+
+    /**
+     * 历史页每次显示时调用
+     *
+     * ViewModel 的生命周期跟随 Activity，应用长时间不退出时，逻辑日期可能已变化；
+     * 此时自动跳到新的一天。同一逻辑日内不改动，保留用户自己选择的日期。
+     */
+    fun onScreenShown() {
+        jumpToLogicalTodayIfChanged()
+    }
+
+    private fun jumpToLogicalTodayIfChanged() {
+        viewModelScope.launch {
+            val boundaryTime = ArchiveUtils.createBoundaryTime(
+                dataStoreManager.archiveBoundaryHourFlow.first(),
+                dataStoreManager.archiveBoundaryMinuteFlow.first()
+            )
+            // 事件记录按逻辑日期归档（分界点前属于前一天），默认日期必须用同一规则，
+            // 否则凌晨打开历史页会落在日历上的今天，看不到刚记的记录
+            val logicalToday = ArchiveUtils.getLogicalDate(wallClockMillis(), boundaryTime)
+            when (lastLogicalToday) {
+                null -> {
+                    // 首次定位：确定日期后才开始订阅会话，避免先按日历日期查询一次
+                    lastLogicalToday = logicalToday
+                    _uiState.update { it.copy(selectedDate = logicalToday, isLoading = true) }
+                    observeSessionsOfSelectedDate()
+                }
+                logicalToday -> Unit
+                else -> {
+                    lastLogicalToday = logicalToday
+                    selectDate(logicalToday)
+                }
+            }
+        }
     }
 
     /**
      * 切换到上一天
      */
     fun goToPreviousDay() {
-        val previousDate = _uiState.value.selectedDate.minusDays(1)
-        _uiState.update { it.copy(selectedDate = previousDate) }
-        loadSessionsForDate(previousDate)
+        selectDate(_uiState.value.selectedDate.minusDays(1))
     }
 
     /**
      * 切换到下一天
      */
     fun goToNextDay() {
-        val nextDate = _uiState.value.selectedDate.plusDays(1)
-        _uiState.update { it.copy(selectedDate = nextDate) }
-        loadSessionsForDate(nextDate)
+        selectDate(_uiState.value.selectedDate.plusDays(1))
     }
 
     /**
      * 选择指定日期
      */
     fun selectDate(date: LocalDate) {
-        _uiState.update { it.copy(selectedDate = date) }
-        loadSessionsForDate(date)
+        if (date == _uiState.value.selectedDate) return
+        // 清空旧日期的会话，避免新日期数据到达前仍按旧会话订阅记录
+        _uiState.update { it.copy(selectedDate = date, sessions = emptyList(), isLoading = true) }
     }
 
     /**
@@ -74,7 +120,6 @@ class EventHistoryViewModel(
             historyRepository.deleteSessionsByDateAndType(date, SessionType.EVENT)
                 .onSuccess {
                     Log.i(TAG, "Deleted all event sessions for $date")
-                    loadSessionsForDate(_uiState.value.selectedDate)
                 }
                 .onFailure { e ->
                     Log.e(TAG, "Failed to delete event sessions", e)
@@ -90,8 +135,6 @@ class EventHistoryViewModel(
             historyRepository.deleteRecord(recordId)
                 .onSuccess {
                     Log.i(TAG, "Deleted record $recordId")
-                    // 重新加载记录列表
-                    loadRecordsForCurrentSession()
                 }
                 .onFailure { e ->
                     Log.e(TAG, "Failed to delete record", e)
@@ -107,8 +150,6 @@ class EventHistoryViewModel(
             historyRepository.updateRecordNote(recordId, newNote)
                 .onSuccess {
                     Log.i(TAG, "Updated record note")
-                    // 重新加载记录列表
-                    loadRecordsForCurrentSession()
                 }
                 .onFailure { e ->
                     Log.e(TAG, "Failed to update record note", e)
@@ -134,50 +175,32 @@ class EventHistoryViewModel(
     }
 
     /**
-     * 加载指定日期的会话列表（事件模式）
+     * 订阅选中日期的会话列表；日期变化时 flatMapLatest 自动取消旧日期的订阅
      */
-    private fun loadSessionsForDate(date: LocalDate) {
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun observeSessionsOfSelectedDate() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-
-            val dateString = date.toString()
-
-            // 使用 Flow 收集会话列表
-            historyRepository.getSessionsByDate(dateString, SessionType.EVENT)
+            _uiState.map { it.selectedDate }
+                .distinctUntilChanged()
+                .flatMapLatest { date -> historyRepository.getSessionsByDate(date.toString(), SessionType.EVENT) }
                 .collect { sessions ->
-                    _uiState.update {
-                        it.copy(
-                            sessions = sessions,
-                            isLoading = false
-                        )
-                    }
-
-                    // 如果有会话，加载会话的记录
-                    if (sessions.isNotEmpty()) {
-                        loadRecordsForCurrentSession()
-                    } else {
-                        _uiState.update { it.copy(selectedSessionRecords = emptyList()) }
-                    }
+                    _uiState.update { it.copy(sessions = sessions, isLoading = false) }
                 }
         }
     }
 
     /**
-     * 加载当前会话的记录列表（事件模式一天只有一个会话）
+     * 订阅当天会话的记录（事件模式一天只有一个会话）；只在会话 id 变化时重新订阅
      */
-    private fun loadRecordsForCurrentSession() {
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun observeRecordsOfSelectedSession() {
         viewModelScope.launch {
-            val sessions = _uiState.value.sessions
-            if (sessions.isEmpty()) {
-                _uiState.update { it.copy(selectedSessionRecords = emptyList()) }
-                return@launch
-            }
-
-            // 事件模式一天只有一个会话，取第一个
-            val currentSession = sessions.first()
-
-            // 使用 Flow 收集记录列表
-            historyRepository.getRecordsBySessionId(currentSession.id)
+            _uiState.map { it.sessions.firstOrNull()?.id }
+                .distinctUntilChanged()
+                .flatMapLatest { sessionId ->
+                    if (sessionId == null) flowOf(emptyList())
+                    else historyRepository.getRecordsBySessionId(sessionId)
+                }
                 .collect { records ->
                     _uiState.update { it.copy(selectedSessionRecords = records) }
                 }
