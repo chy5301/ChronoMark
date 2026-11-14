@@ -10,6 +10,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -128,6 +129,39 @@ class HistoryViewModelFlowTest {
             testScheduler.runCurrent()
 
             assertEquals(listOf("r2"), vm.uiState.value.selectedSessionRecords.map { it.id })
+        }
+
+    @Test
+    fun `stopwatch - sessions update without selection change - does not re-subscribe records`() =
+        runTest(testDispatcher) {
+            val type = SessionType.STOPWATCH
+            sessionsOf(today.toString(), type).value = listOf(session("s1", today, type))
+            val vm = StopwatchHistoryViewModel(repository)
+            testScheduler.runCurrent()
+
+            // 改标题、或当天归档了新会话：会话列表变化，但选中的仍是 s1
+            sessionsOf(today.toString(), type).value = listOf(session("s1", today, type, "新标题"))
+            testScheduler.runCurrent()
+            sessionsOf(today.toString(), type).value =
+                listOf(session("s1", today, type, "新标题"), session("s2", today, type))
+            testScheduler.runCurrent()
+
+            verify(exactly = 1) { repository.getRecordsBySessionId("s1") }
+            assertEquals(0, vm.uiState.value.currentSessionIndex)
+        }
+
+    @Test
+    fun `event - session row updated - does not re-subscribe records`() =
+        runTest(testDispatcher) {
+            val type = SessionType.EVENT
+            sessionsOf(today.toString(), type).value = listOf(session("t", today, type))
+            eventHistoryViewModel()
+            testScheduler.runCurrent()
+
+            sessionsOf(today.toString(), type).value = listOf(session("t", today, type, "x"))
+            testScheduler.runCurrent()
+
+            verify(exactly = 1) { repository.getRecordsBySessionId("t") }
         }
 
     @Test
