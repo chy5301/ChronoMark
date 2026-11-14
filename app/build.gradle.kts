@@ -69,6 +69,8 @@ android {
         release {
             // 启用 R8 代码混淆
             isMinifyEnabled = true
+            // 移除未被引用的资源（需配合 R8）
+            isShrinkResources = true
             // 如果存在签名配置则使用（本地或 CI）
             if (hasLocalKeystore || hasCiSigning) {
                 signingConfig = signingConfigs.getByName("release")

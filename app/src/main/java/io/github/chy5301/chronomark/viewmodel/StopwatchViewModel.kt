@@ -392,7 +392,6 @@ class StopwatchViewModel(
     }
 
     override fun onCleared() {
-        super.onCleared()
         // 此时 viewModelScope 已被取消，无法再保存；各操作发生时已即时保存，运行中的时长可由计时基准还原
         stopTimerTicking()
         wallClockJob?.cancel()
