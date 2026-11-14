@@ -1,5 +1,5 @@
 [versions]
-agp = "8.13.1"
+agp = "9.5.1"
 kotlin = "2.4.21"
 ksp = "2.3.14"
 coreKtx = "1.10.1"
@@ -8,7 +8,7 @@ junitVersion = "1.1.5"
 espressoCore = "3.5.1"
 lifecycleRuntimeKtx = "2.6.1"
 activityCompose = "1.8.0"
-composeBom = "2024.09.00"
+composeBom = "2026.09.00"
 lifecycleViewmodel = "2.8.0"
 datastore = "1.1.1"
 kotlinxSerialization = "1.13.0"
@@ -52,7 +52,6 @@ androidx-arch-core-testing = { group = "androidx.arch.core", name = "core-testin
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
