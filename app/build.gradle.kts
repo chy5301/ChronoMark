@@ -3,12 +3,12 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
 }
 
 // 读取签名配置（支持本地和 CI 双模式）
 import java.util.Properties
 import java.io.FileInputStream
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties()
@@ -37,11 +37,6 @@ android {
         versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        // Room schema 导出配置
-        ksp {
-            arg("room.schemaLocation", "$projectDir/schemas")
-        }
     }
 
     // 签名配置
@@ -93,10 +88,9 @@ android {
     }
 }
 
-kotlin {
-    compilerOptions {
-        jvmTarget = JvmTarget.JVM_17
-    }
+// Room schema 导出目录（新增数据库版本时需提交生成的 JSON）
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
 dependencies {

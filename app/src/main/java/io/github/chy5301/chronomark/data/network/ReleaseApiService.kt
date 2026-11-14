@@ -63,7 +63,7 @@ class ReleaseApiService(
                     )
                 }
 
-                val body = response.body.string().ifEmpty { null }
+                val body = response.body.string().ifBlank { null }
                     ?: return@withContext Result.failure(Exception("Empty response from Gitee"))
 
                 val releaseInfo = json.decodeFromString<GiteeReleaseInfo>(body)
@@ -96,7 +96,7 @@ class ReleaseApiService(
                     )
                 }
 
-                val body = response.body.string().ifEmpty { null }
+                val body = response.body.string().ifBlank { null }
                     ?: return@withContext Result.failure(Exception("Empty response from GitHub"))
 
                 val releaseInfo = json.decodeFromString<GitHubReleaseInfo>(body)
