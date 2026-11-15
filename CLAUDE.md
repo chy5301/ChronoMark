@@ -37,8 +37,9 @@ ChronoMark 是基于 Jetpack Compose 的 Android 时间记录应用，提供**�
 
 **发布新版本**:
 ```bash
-# 1. 更新 CHANGELOG.md 和 app/build.gradle.kts 版本号
-# 2. 提交推送后创建 tag
+# 1. 在分支上更新 CHANGELOG.md 和 app/build.gradle.kts 版本号，开 PR 并 squash 合并
+# 2. 切回 main 拉取最新后再打 tag（tag 不在 main 上时 release.yml 会直接失败）
+git checkout main && git pull
 git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z
 ```
 
