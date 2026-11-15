@@ -1,0 +1,144 @@
+name: Gitee Sync
+
+# 将仓库与 GitHub Release 同步到 Gitee（应用默认优先从 Gitee 检查更新）
+# - 由 release.yml 在创建 GitHub Release 后调用
+# - 也可手动触发，用于网络失败后重跑或补同步已有版本；每一步都可重复执行
+# 需要仓库 Secret：GITEE_TOKEN（Gitee 私人令牌，勾选 projects 权限）
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: '要同步的版本 tag（如 v1.1.1）'
+        required: true
+        type: string
+    secrets:
+      GITEE_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要同步的版本 tag（如 v1.1.1），对应的 GitHub Release 须已存在'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gitee-sync
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ inputs.tag }}
+  GITEE_OWNER: chy5301
+  GITEE_REPO: ChronoMark
+
+jobs:
+  sync:
+    name: Sync to Gitee
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Validate inputs
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: |
+          if [[ ! $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::tag 格式须为 vX.Y.Z，实际为: $TAG"
+            exit 1
+          fi
+          if [ -z "$GITEE_TOKEN" ]; then
+            echo "::error::未配置 GITEE_TOKEN Secret"
+            exit 1
+          fi
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push main and tag to Gitee
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: |
+          git rev-parse --verify --quiet "refs/tags/$TAG" >/dev/null \
+            || { echo "::error::仓库中不存在 tag $TAG"; exit 1; }
+          git merge-base --is-ancestor "$TAG" origin/main \
+            || { echo "::error::$TAG 不在 main 分支上"; exit 1; }
+
+          url="https://${GITEE_OWNER}:${GITEE_TOKEN}@gitee.com/${GITEE_OWNER}/${GITEE_REPO}.git"
+          # 不强推：Gitee 上若有 GitHub 没有的提交（如在网页上改过），直接失败，由人工处理
+          for i in 1 2 3 4 5; do
+            if git push "$url" "refs/remotes/origin/main:refs/heads/main" "refs/tags/$TAG:refs/tags/$TAG"; then
+              exit 0
+            fi
+            echo "::warning::第 $i 次推送失败，30 秒后重试"
+            sleep 30
+          done
+          echo "::error::推送到 Gitee 失败"
+          exit 1
+
+      - name: Download GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p "ChronoMark-$TAG.apk" -D dist
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json body -q .body > dist/notes.md
+          [ -s dist/notes.md ] || echo "Release $TAG" > dist/notes.md
+          ls -l dist
+
+      - name: Create Gitee Release and upload APK
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: |
+          api="https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}"
+          apk="ChronoMark-$TAG.apk"
+          commit=$(git rev-parse "$TAG^{commit}")
+
+          # 单次请求只对连接类错误自动重试；写操作失败后由外层循环先复查状态再决定是否重做，避免重复创建
+          req() { curl -sS --fail-with-body --retry 3 --retry-connrefused --retry-delay 10 --max-time 300 "$@"; }
+          # 不存在时接口返回 null（HTTP 200）
+          get_release() { req "$api/releases/tags/$TAG"; }
+
+          release_id=""
+          for i in 1 2 3 4 5; do
+            release_id=$(get_release | jq -r '.id // empty') || release_id=""
+            [ -n "$release_id" ] && break
+            echo "创建 Gitee Release $TAG（第 $i 次）"
+            out=$(req -X POST "$api/releases" \
+              --data-urlencode "access_token=$GITEE_TOKEN" \
+              --data-urlencode "tag_name=$TAG" \
+              --data-urlencode "name=$TAG" \
+              --data-urlencode "body@dist/notes.md" \
+              --data-urlencode "target_commitish=$commit" \
+              --data-urlencode "prerelease=false") || { echo "$out"; sleep 20; }
+          done
+          [ -n "$release_id" ] || { echo "::error::创建 Gitee Release 失败"; exit 1; }
+          echo "Gitee Release id: $release_id"
+
+          uploaded=false
+          for i in 1 2 3 4 5; do
+            if get_release | jq -e --arg n "$apk" 'any(.assets[]?; .name == $n)' >/dev/null; then
+              uploaded=true
+              break
+            fi
+            echo "上传 $apk（第 $i 次）"
+            out=$(req -X POST "$api/releases/$release_id/attach_files" \
+              -F "access_token=$GITEE_TOKEN" \
+              -F "file=@dist/$apk") || { echo "$out"; sleep 20; }
+          done
+          $uploaded || { echo "::error::上传 APK 到 Gitee 失败"; exit 1; }
+          echo "APK 已在 Gitee Release 中"
+
+          latest=$(req "$api/releases/latest" | jq -r '.tag_name // empty')
+          echo "Gitee 最新 Release: $latest"
+          if [ "$latest" != "$TAG" ]; then
+            echo "::warning::Gitee 最新 Release 为 $latest，不是 $TAG（补同步旧版本时属正常）"
+          fi
+          {
+            echo "### Gitee 同步完成"
+            echo "https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/tag/$TAG"
+          } >> "$GITHUB_STEP_SUMMARY"

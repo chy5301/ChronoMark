@@ -125,3 +125,14 @@ jobs:
           files: ./artifacts/ChronoMark-${{ env.TAG_NAME }}.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  gitee:
+    name: Sync to Gitee
+    needs: release
+    permissions:
+      contents: read
+    uses: ./.github/workflows/gitee-sync.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets:
+      GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
