@@ -27,6 +27,11 @@ jobs:
             echo "Error: Tag format must be vX.Y.Z (e.g., v1.0.0)"
             exit 1
           fi
+          # squash 合并后 PR 分支上的提交不在 main 上；tag 须打在 main 上，否则 Gitee 同步会在 GitHub Release 发布后才失败
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Error: Tag $TAG is not on main. Merge the release PR first, then tag the commit on main."
+            exit 1
+          fi
           echo "TAG_NAME=$TAG" >> $GITHUB_ENV
 
       - name: Set up JDK
@@ -125,3 +130,14 @@ jobs:
           files: ./artifacts/ChronoMark-${{ env.TAG_NAME }}.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  gitee:
+    name: Sync to Gitee
+    needs: release
+    permissions:
+      contents: read
+    uses: ./.github/workflows/gitee-sync.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets:
+      GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}

@@ -6,7 +6,7 @@
 
 ChronoMark 是基于 Jetpack Compose 的 Android 时间记录应用，提供**事件模式**（一键记录当前时刻）和**秒表模式**（高精度计时）两种独立模式。
 
-**当前版本**: v1.1.0
+**当前版本**: v1.1.1
 
 ## 技术栈
 
@@ -32,12 +32,14 @@ ChronoMark 是基于 Jetpack Compose 的 Android 时间记录应用，提供**�
 ## CI/CD
 
 - `.github/workflows/ci.yml` - Push/PR 到 main 时运行 Lint + 测试 + Debug 构建
-- `.github/workflows/release.yml` - Push tag `v*.*.*` 时自动构建签名 APK 并创建 Release
+- `.github/workflows/release.yml` - Push tag `v*.*.*` 时自动构建签名 APK 并创建 Release，随后调用 `gitee-sync.yml`
+- `.github/workflows/gitee-sync.yml` - 推送 main 与 tag 到 Gitee，创建 Gitee Release 并上传 APK（需 Secret `GITEE_TOKEN`）。应用默认优先从 Gitee 检查更新，Gitee 不同步用户就收不到新版本；失败时在 Actions 页手动触发并填 tag 重跑，各步骤可重复执行
 
 **发布新版本**:
 ```bash
-# 1. 更新 CHANGELOG.md 和 app/build.gradle.kts 版本号
-# 2. 提交推送后创建 tag
+# 1. 在分支上更新 CHANGELOG.md 和 app/build.gradle.kts 版本号，开 PR 并 squash 合并
+# 2. 切回 main 拉取最新后再打 tag（tag 不在 main 上时 release.yml 会直接失败）
+git checkout main && git pull
 git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z
 ```
 
